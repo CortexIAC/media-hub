@@ -60,6 +60,16 @@ if (!remoteTags.includes(`refs/tags/${tag}`)) {
   }
 } else {
   console.log(`tag ${tag} already on origin`)
+  // Re-uploading the same version is legitimate (recovering a dropped upload),
+  // but it is worth saying out loud when the code no longer matches the tag.
+  const taggedCommit = git(['rev-list', '-n', '1', tag])
+  const head = git(['rev-parse', 'HEAD'])
+  if (taggedCommit !== head) {
+    console.warn(
+      `warning: ${tag} points at ${taggedCommit.slice(0, 7)} but HEAD is ${head.slice(0, 7)}. ` +
+        'Bump the version unless you are re-uploading the same build.'
+    )
+  }
 }
 
 const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? tokenFromGitCredentialManager()

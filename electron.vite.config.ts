@@ -11,9 +11,8 @@ export default defineConfig({
   main: {
     resolve: { alias },
     build: {
-      // Bundle runtime dependencies (music-metadata is ESM-only) so the main
+      // Runtime dependencies (music-metadata is ESM-only) are bundled so the main
       // bundle and the scanner worker are self-contained CommonJS files.
-      externalizeDeps: false,
       rollupOptions: {
         external: ['electron'],
         input: {
@@ -24,6 +23,7 @@ export default defineConfig({
     }
   },
   preload: {
+    resolve: { alias },
     build: {
       rollupOptions: {
         external: ['electron']

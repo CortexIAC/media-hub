@@ -4,8 +4,9 @@ dist/
 .vite/
 *.log
 test-results/
-screenshots/*.tmp.png
+fixtures/
 .tmp/
 artifacts/
 
 .freebuff/
+benchmarks/

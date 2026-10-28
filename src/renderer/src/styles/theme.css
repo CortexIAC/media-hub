@@ -1,0 +1,42 @@
+:root {
+  /* Palette — mirrored in theme/theme.ts. Overridable at runtime. */
+  --bg: #0a0d0c;
+  --bg-deep: #070908;
+  --panel: #111614;
+  --panel-raised: #161d1a;
+  --panel-hover: #1b2420;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --text: #edf2ef;
+  --text-dim: #a3b0aa;
+  --text-faint: #7e8c86;
+  --accent: #3ddc84;
+  --accent-ink: #06210f;
+  --accent-soft: rgba(61, 220, 132, 0.14);
+  --accent-line: rgba(61, 220, 132, 0.4);
+  --danger: #ff6b6b;
+  --warning: #f2c46b;
+
+  /* Shape and rhythm */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 30px;
+  --space-7: 40px;
+  --titlebar-height: 38px;
+  --sidebar-width: 236px;
+  --playerbar-height: 92px;
+
+  /* Type */
+  --font: 'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', Inter, system-ui, sans-serif;
+
+  --shadow-panel: 0 18px 44px rgba(0, 0, 0, 0.42);
+  --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+}

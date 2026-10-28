@@ -2,6 +2,7 @@ export type Route =
   | { name: 'music' }
   | { name: 'video' }
   | { name: 'streams' }
+  | { name: 'archive' }
   | { name: 'virtual-library' }
   | { name: 'library' }
   | { name: 'devices' }

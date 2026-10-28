@@ -7,12 +7,14 @@ import { StreamStage } from './components/StreamStage'
 import { TitleBar } from './components/TitleBar'
 import { Toasts } from './components/Toasts'
 import { YouTubeStage } from './components/YouTubeStage'
+import { ArchiveProvider } from './state/archive'
 import { DataProvider, useData } from './state/data'
 import { PlayerProvider, usePlayerActions } from './state/player'
 import { StreamsProvider, useStreams } from './state/streams'
 import { UiProvider, useUi } from './state/ui'
 import { YouTubeProvider, useYouTube } from './state/youtube'
 import { AlbumView } from './views/AlbumView'
+import { ArchiveView } from './views/ArchiveView'
 import { ArtistView } from './views/ArtistView'
 import { DevicesView } from './views/DevicesView'
 import { FavoritesView } from './views/FavoritesView'
@@ -34,7 +36,9 @@ export default function App(): ReactElement {
         <PlayerProvider>
           <YouTubeProvider>
             <StreamsProvider>
-              <Shell />
+              <ArchiveProvider>
+                <Shell />
+              </ArchiveProvider>
             </StreamsProvider>
           </YouTubeProvider>
         </PlayerProvider>
@@ -53,7 +57,7 @@ function Shell(): ReactElement {
   // corner. The content column stacks when either one is staged.
   const staged =
     (ui.route.name === 'video' && youtube.current !== null) ||
-    (ui.route.name === 'streams' && streams.current !== null)
+    ((ui.route.name === 'streams' || ui.route.name === 'archive') && streams.current !== null)
 
   useKeyboardShortcuts()
 
@@ -115,6 +119,8 @@ function ViewRouter(): ReactElement {
       return <VideoView />
     case 'streams':
       return <StreamsView />
+    case 'archive':
+      return <ArchiveView />
     case 'virtual-library':
       return <VirtualLibraryView />
     case 'library':

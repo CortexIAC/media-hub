@@ -17,6 +17,7 @@ export function dataPaths(userDataDir: string) {
     settings: join(userDataDir, 'settings.json'),
     session: join(userDataDir, 'session.json'),
     streams: join(userDataDir, 'streams.json'),
+    archive: join(userDataDir, 'archive.json'),
     youtube: join(userDataDir, 'youtube.json')
   }
 }

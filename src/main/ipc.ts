@@ -15,14 +15,35 @@ import {
   type VerifyResult
 } from '@shared/ipc'
 import { classifyStream } from '@core/streams'
+import {
+  bestSubtitle,
+  archiveKindOf,
+  decodeSubtitleBytes,
+  rightsLabel,
+  sanitizeArchiveRecord,
+  toWebVtt,
+  type ArchiveItemRecord
+} from '@core/archive'
 import type { LibraryStore } from './storage/libraryStore'
 import type { PlaylistStore } from './storage/playlistStore'
 import type { SessionStore, SettingsStore } from './storage/sessionStore'
 import type { DataPaths } from './storage/paths'
 import type { ScannerService } from './library/scannerService'
 import { trackUrl } from './mediaProtocol'
-import { streamProxyUrl } from './streamProtocol'
+import { imageProxyUrl, streamProxyUrl, subtitleLocalUrl, subtitleRemoteUrl } from './streamProtocol'
 import { addStreamFromUrl } from './providers/streams'
+import { fetchArchiveItem, searchArchiveItems } from './providers/archive'
+import { archiveItemImageUrl, archiveDetailsUrl } from '@core/archive'
+import type { ArchiveStore } from './storage/archiveStore'
+import type {
+  ArchiveAttachResult,
+  ArchiveCollection,
+  ArchiveItemResult,
+  ArchiveItemView,
+  ArchiveLibraryView,
+  ArchiveSearchResult,
+  ArchiveEpisodeView
+} from '@shared/ipc'
 import { seedSources } from '@core/streamSeeds'
 import { openStreamExternally } from './externalPlayer'
 import type { StreamStore } from './storage/streamStore'
@@ -42,6 +63,7 @@ export interface IpcContext {
   session: SessionStore
   youtube: YouTubeStore
   streams: StreamStore
+  archive: ArchiveStore
   scanner: ScannerService
   paths: DataPaths
   getProgress: () => ScanProgress | null
@@ -66,8 +88,61 @@ function buildStreamsState(store: StreamStore): StreamsViewState {
   }
 }
 
+function archiveEpisodeView(
+  item: ArchiveItemRecord,
+  episode: ArchiveItemRecord['episodes'][number],
+  store: ArchiveStore
+): ArchiveEpisodeView {
+  const { kind, reason } = classifyStream(episode.url)
+  const attachment = store.attachment(item.identifier, episode.index)
+  const archiveCaption = attachment ? null : bestSubtitle(episode)
+  return {
+    ...episode,
+    playUrl: streamProxyUrl(episode.url),
+    kind,
+    unsupportedReason: reason,
+    subtitleUrl: attachment
+      ? subtitleLocalUrl(item.identifier, episode.index)
+      : archiveCaption
+        ? subtitleRemoteUrl(archiveCaption.url)
+        : null,
+    subtitleLabel: attachment ? attachment.name : (archiveCaption?.label ?? null),
+    attachedSubtitle: attachment?.name ?? null
+  }
+}
+
+function archiveItemView(item: ArchiveItemRecord, store: ArchiveStore): ArchiveItemView {
+  const entry = store.get(item.identifier)
+  return {
+    identifier: item.identifier,
+    title: item.title,
+    creator: item.creator,
+    year: item.year,
+    description: item.description,
+    collection: item.collection,
+    licenseUrl: item.licenseUrl,
+    rights: rightsLabel(item.licenseUrl),
+    mediaType: item.mediaType,
+    posterUrl: imageProxyUrl(archiveItemImageUrl(item.identifier)),
+    detailUrl: archiveDetailsUrl(item.identifier),
+    kind: archiveKindOf(item),
+    episodes: item.episodes.map((episode) => archiveEpisodeView(item, episode, store)),
+    saved: entry !== null,
+    savedAt: entry?.savedAt ?? null,
+    lastPlayedAt: entry?.lastPlayedAt ?? null,
+    lastEpisodeIndex: entry?.lastEpisodeIndex ?? null
+  }
+}
+
+function buildArchiveState(store: ArchiveStore): ArchiveLibraryView {
+  const items = [...store.entries]
+    .sort((a, b) => (b.lastPlayedAt ?? b.savedAt) - (a.lastPlayedAt ?? a.savedAt))
+    .map((entry) => archiveItemView(entry.item, store))
+  return { items }
+}
+
 export function registerIpc(context: IpcContext): void {
-  const { library, playlists, settings, session, youtube, streams, scanner, paths } = context
+  const { library, playlists, settings, session, youtube, streams, archive, scanner, paths } = context
   const lyricsCache = new Map<string, LyricsResult | null>()
 
   ipcMain.handle(IPC.libraryGet, () => buildLibraryState(context))
@@ -443,6 +518,123 @@ export function registerIpc(context: IpcContext): void {
   ipcMain.handle(IPC.streamsOpenExternal, async (_event, url: string): Promise<StreamExternalResult> => {
     return openStreamExternally(String(url ?? ''))
   })
+
+  ipcMain.handle(
+    IPC.archiveSearch,
+    async (_event, query: string, collection: ArchiveCollection): Promise<ArchiveSearchResult> => {
+      try {
+        const docs = await searchArchiveItems(String(query ?? ''), { collection })
+        return {
+          hits: docs.map((doc) => ({
+            ...doc,
+            posterUrl: imageProxyUrl(archiveItemImageUrl(doc.identifier)),
+            detailUrl: archiveDetailsUrl(doc.identifier)
+          })),
+          error: null
+        }
+      } catch (error) {
+        return { hits: [], error: messageOf(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(IPC.archiveItem, async (_event, identifier: string): Promise<ArchiveItemResult> => {
+    try {
+      const item = await fetchArchiveItem(String(identifier ?? ''))
+      return { item: archiveItemView(item, archive), error: null }
+    } catch (error) {
+      return { item: null, error: messageOf(error) }
+    }
+  })
+
+  ipcMain.handle(IPC.archiveState, (): ArchiveLibraryView => buildArchiveState(archive))
+
+  ipcMain.handle(IPC.archiveSave, async (_event, raw: unknown): Promise<ArchiveLibraryView> => {
+    const record = sanitizeArchiveRecord(raw)
+    if (record) {
+      archive.save(record)
+      await archive.flush()
+    }
+    return buildArchiveState(archive)
+  })
+
+  ipcMain.handle(IPC.archiveRemove, async (_event, identifier: string): Promise<ArchiveLibraryView> => {
+    archive.remove(String(identifier ?? ''))
+    await archive.flush()
+    return buildArchiveState(archive)
+  })
+
+  ipcMain.handle(
+    IPC.archiveMarkPlayed,
+    async (_event, identifier: string, episodeIndex: number): Promise<ArchiveLibraryView> => {
+      archive.markPlayed(String(identifier ?? ''), Number(episodeIndex))
+      await archive.flush()
+      return buildArchiveState(archive)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.archiveAttachSubtitle,
+    async (_event, identifier: string, episodeIndex: number): Promise<ArchiveAttachResult> => {
+      const id = String(identifier ?? '')
+      const index = Number(episodeIndex)
+      const entry = archive.get(id)
+      const empty: ArchiveAttachResult = {
+        cancelled: true,
+        state: buildArchiveState(archive),
+        item: entry ? archiveItemView(entry.item, archive) : null,
+        error: null
+      }
+      if (!entry) return { ...empty, error: 'Save this title before attaching subtitles.' }
+      const episode = entry.item.episodes[index]
+      if (!episode) return { ...empty, error: 'That episode is no longer part of this title.' }
+
+      const window = context.getWindow()
+      const options = {
+        title: `Attach subtitles to ${episode.label}`,
+        buttonLabel: 'Attach',
+        properties: ['openFile' as const],
+        filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }]
+      }
+      const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+      if (result.canceled || result.filePaths.length === 0) return empty
+
+      const filePath = result.filePaths[0]
+      if (!filePath) return empty
+      try {
+        const stat = await fs.stat(filePath)
+        if (!stat.isFile()) return { ...empty, error: 'That path is not a file.' }
+        if (stat.size > 4 * 1024 * 1024) return { ...empty, error: 'That subtitle file is larger than 4 MB.' }
+        const text = decodeSubtitleBytes(await fs.readFile(filePath))
+        const vtt = toWebVtt(text)
+        if (!vtt.includes('-->')) {
+          return { ...empty, error: 'That file does not look like SubRip or WebVTT subtitles.' }
+        }
+        const name = filePath.split(/[\\/]/).pop() ?? 'Subtitles'
+        archive.attach(id, index, filePath, name)
+        await archive.flush()
+        return { cancelled: false, state: buildArchiveState(archive), item: archiveItemView(entry.item, archive), error: null }
+      } catch (error) {
+        return { ...empty, error: `Could not read that subtitle file: ${messageOf(error)}` }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    IPC.archiveRemoveSubtitle,
+    async (_event, identifier: string, episodeIndex: number): Promise<ArchiveAttachResult> => {
+      const id = String(identifier ?? '')
+      archive.detach(id, Number(episodeIndex))
+      await archive.flush()
+      const entry = archive.get(id)
+      return {
+        cancelled: false,
+        state: buildArchiveState(archive),
+        item: entry ? archiveItemView(entry.item, archive) : null,
+        error: null
+      }
+    }
+  )
 }
 
 function messageOf(error: unknown): string {

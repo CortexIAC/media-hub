@@ -6,6 +6,8 @@ Sprint 1 scope is a reliable local music player, an equalizer, honest catalogue 
 
 ![Music library](screenshots/02-music-library.png)
 
+![Internet Archive tab](screenshots/20-archive-detail.png)
+
 ## Open the app
 
 Three ways, depending on what you want:
@@ -29,6 +31,7 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Lyrics**: embedded tags, `.lrc`/`.txt` sidecar files, and an LRCLIB lookup as a fallback, with synced lines following the playhead in Now Playing.
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
 - **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive.
+- **Archive (Internet Archive)**: a separate tab for the archive's public film and TV catalogue — old cartoons, classic serials, public-domain film and old-time radio. Search matches item titles and ranks the closest title first; when a narrow collection has almost nothing, the search widens to all film and TV and says so. Open an item to see its episodes as individual files labelled from their names (`S01E02 · Monitored`), save it to **Shows** or **Movies**, and play any episode in the app's own player. Captions supplied by the item are used when they load; you can attach your own `.srt`/`.vtt` to any saved episode.
 - **Streams**: paste a direct media URL, an HLS (`.m3u8`) playlist or an M3U/PLS channel list. Links are checked before they are saved, a channel list is expanded into entries, and playback survives leaving the screen (the player docks to the corner). Formats Chromium cannot decode — MKV, AVI, MPEG-TS, HEVC — are handed to VLC with the same URL instead of failing silently.
 - **Suggested streams on first launch**: a small curated set of *legal, publicly offered* links — public radio (SomaFM, Radio Paradise, Radio Swiss Classic), NASA's public live HLS stream, and public-domain film and audiobooks from the Internet Archive. They are added once; delete any you do not want and they stay deleted. No IPTV lists, trackers or indexer APIs are bundled.
 - **YouTube**: search with no key at all — from the Video screen or the search field at the top — then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. The player docks to the corner while you browse other screens (a video keeps playing while you look through the library, and it stays visible on purpose: YouTube's terms forbid hidden playback). A Data API key is optional and only changes the search path.
@@ -36,7 +39,7 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 
 ## What is planned, not built
 
-A browsable video catalogue beyond YouTube, Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts, torrent/indexer metadata APIs. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
+Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts, torrent/indexer metadata APIs. The Archive tab searches the first 36 matching items (no pagination yet) and does not split a single-file compilation into episodes — it does not re-encode media. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
 
 ## Commands
 
@@ -45,13 +48,14 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 166 unit tests (vitest)
+npm test             # 184 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
 node scripts/check-youtube.mjs        # live YouTube search → real playback check (needs a build)
 node scripts/check-youtube-dock.mjs   # live check that playback survives leaving the Video screen
 node scripts/check-streams.mjs        # live stream check: local server + M3U import + HLS playback
+node scripts/check-archive.mjs        # live Archive check: archive.org search, save, playback, subtitles, restart
 ```
 
 End-to-end tests drive the real Electron app with Playwright, import a generated fixture library, play MP3/WAV/FLAC audio, restart the app and verify persistence. Screenshots are written to `screenshots/`.
@@ -70,6 +74,7 @@ playlists.json   playlists and favorites
 settings.json    volume, equalizer curve, boost, bass, accent, YouTube key
 session.json     last track, queue and position
 streams.json     saved network stream links (URLs only, never media)
+archive.json     saved Internet Archive shows/movies and attached subtitle file paths
 artwork/         cached cover images (deduplicated by hash)
 ```
 
@@ -80,6 +85,7 @@ Settings → Library → **Open data folder** takes you there.
 - Open Library, Project Gutenberg, LibriVox and the Internet Archive are queried through their public read APIs, with a descriptive User-Agent, bounded timeouts and no retries in a loop.
 - YouTube search needs no key: it uses the same public search request YouTube's own web player makes, and falls back to the documented Data API v3 when you add a key. Playback always happens in the official embedded player, because YouTube's developer policies forbid extracting audio, hiding the player or background playback. On the Video screen that player is the stage; elsewhere it docks into the corner, still on screen and still at least 366×206 px. Minimising the window pauses it. No stream URL is ever resolved.
 - Streams are links **you** supply. The app does not search trackers, resolve stream endpoints, bundle a catalogue or scrape indexers; it plays an http(s) URL you paste, or the channel entries inside an M3U/PLS list you import. Media is fetched by the main process through the app's own `bunny-stream:` protocol, which is a pass-through — nothing is downloaded to disk, cached, or re-broadcast. Rights to the content remain yours to check, exactly as with a browser or VLC.
+- The Archive tab uses the Internet Archive's public `advancedsearch.php` and `metadata/{identifier}` read APIs, plus its public image service for posters. Episodes play directly from archive.org's own download URLs through the same `bunny-stream:` proxy as any other stream; nothing is downloaded to disk, copied or re-encoded. Uploads are user-contributed, so each item's rights are the uploader's and are shown on the item screen before you save it. Caption sidecars are read only from that item, and a subtitle file you attach stays on your machine.
 - Lyrics come from your files first. When neither a tag nor a sidecar file exists, the app asks [LRCLIB](https://lrclib.net), a free open lyrics service; only the track title, artist, album and duration are sent.
 - Copyrighted books (for example Margaret Peterson Haddix's *The Missing* series) are **not** downloadable here. Open Library links to legal borrowing; your local library's Libby/OverDrive catalogue is the usual free route.
 
@@ -96,6 +102,7 @@ docs/            architecture, testing, dependencies, provider feasibility, spri
 
 ## More documentation
 
+- [Internet Archive tab](docs/ARCHIVE.md)
 - [YouTube search and playback](docs/YOUTUBE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing and manual playback verification](docs/TESTING.md)

@@ -16,6 +16,7 @@ import type { DiscoveryKind, DiscoveryResponse } from '@core/discovery'
 import type { YouTubeVideo } from '@core/youtube'
 import type { StreamKind, StreamSource } from '@core/streams'
 import type { ProviderDescriptor } from '@core/providers'
+import type { ArchiveEpisodeRecord, ArchiveItemRecord, ArchiveSearchDoc } from '@core/archive'
 
 export const IPC = {
   libraryGet: 'library:get',
@@ -68,7 +69,16 @@ export const IPC = {
   streamsRemove: 'streams:remove',
   streamsRename: 'streams:rename',
   streamsMarkPlayed: 'streams:mark-played',
-  streamsOpenExternal: 'streams:open-external'
+  streamsOpenExternal: 'streams:open-external',
+
+  archiveSearch: 'archive:search',
+  archiveItem: 'archive:item',
+  archiveState: 'archive:state',
+  archiveSave: 'archive:save',
+  archiveRemove: 'archive:remove',
+  archiveMarkPlayed: 'archive:mark-played',
+  archiveAttachSubtitle: 'archive:attach-subtitle',
+  archiveRemoveSubtitle: 'archive:remove-subtitle'
 } as const
 
 export interface ImportResult {
@@ -133,6 +143,69 @@ export interface StreamSourceView extends StreamSource {
   playUrl: string
   /** Set when the link cannot be decoded in-app, so the UI can explain why. */
   unsupportedReason: string | null
+  /** WebVTT track served by the app, when the source has one. */
+  subtitleUrl?: string | null
+  subtitleLabel?: string | null
+}
+
+export type ArchiveCollection = 'cartoons' | 'classic-tv' | 'movies' | 'radio' | 'all'
+
+export interface ArchiveSearchHit extends ArchiveSearchDoc {
+  /** `bunny-stream://image/…` — the renderer never loads archive.org directly. */
+  posterUrl: string
+  detailUrl: string
+}
+
+export interface ArchiveEpisodeView extends ArchiveEpisodeRecord {
+  playUrl: string
+  kind: StreamKind
+  unsupportedReason: string | null
+  /** Ready `bunny-stream:` WebVTT URL, from the item or an attached file. */
+  subtitleUrl: string | null
+  subtitleLabel: string | null
+  /** File name when the user attached their own captions. */
+  attachedSubtitle: string | null
+}
+
+export interface ArchiveItemView {
+  identifier: string
+  title: string
+  creator: string | null
+  year: number | null
+  description: string | null
+  collection: string | null
+  licenseUrl: string | null
+  rights: string
+  mediaType: ArchiveItemRecord['mediaType']
+  posterUrl: string
+  detailUrl: string
+  kind: 'show' | 'movie'
+  episodes: ArchiveEpisodeView[]
+  saved: boolean
+  savedAt: number | null
+  lastPlayedAt: number | null
+  lastEpisodeIndex: number | null
+}
+
+export interface ArchiveSearchResult {
+  hits: ArchiveSearchHit[]
+  error: string | null
+}
+
+export interface ArchiveItemResult {
+  item: ArchiveItemView | null
+  error: string | null
+}
+
+export interface ArchiveLibraryView {
+  items: ArchiveItemView[]
+}
+
+export interface ArchiveAttachResult {
+  cancelled: boolean
+  state: ArchiveLibraryView
+  item: ArchiveItemView | null
+  error: string | null
 }
 
 export interface StreamsViewState {
@@ -231,6 +304,16 @@ export interface BunnyApi {
     rename(id: string, name: string): Promise<StreamsViewState>
     markPlayed(id: string): Promise<StreamsViewState>
     openExternal(url: string): Promise<StreamExternalResult>
+  }
+  archive: {
+    search(query: string, collection: ArchiveCollection): Promise<ArchiveSearchResult>
+    item(identifier: string): Promise<ArchiveItemResult>
+    state(): Promise<ArchiveLibraryView>
+    save(item: ArchiveItemView): Promise<ArchiveLibraryView>
+    remove(identifier: string): Promise<ArchiveLibraryView>
+    markPlayed(identifier: string, episodeIndex: number): Promise<ArchiveLibraryView>
+    attachSubtitle(identifier: string, episodeIndex: number): Promise<ArchiveAttachResult>
+    removeSubtitle(identifier: string, episodeIndex: number): Promise<ArchiveAttachResult>
   }
 }
 

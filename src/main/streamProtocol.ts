@@ -1,5 +1,7 @@
+import { promises as fs } from 'node:fs'
 import { net, protocol } from 'electron'
 import { STREAM_SCHEME, looksLikeHlsPlaylist, normalizeStreamUrl, rewriteHlsPlaylist } from '@core/streams'
+import { decodeSubtitleBytes, toWebVtt } from '@core/archive'
 
 /**
  * bunny-stream://proxy/<encoded absolute url>
@@ -23,6 +25,9 @@ const USER_AGENT = 'BunnyMediaHub/0.1 (desktop media player; +https://github.com
 const HEADER_TIMEOUT_MS = 20_000
 /** Playlists are rewritten in memory, so they must stay small. */
 const PLAYLIST_LIMIT_BYTES = 4 * 1024 * 1024
+/** Caption files are converted in memory; anything larger is not a subtitle. */
+const SUBTITLE_LIMIT_BYTES = 4 * 1024 * 1024
+const IMAGE_LIMIT_BYTES = 12 * 1024 * 1024
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -56,17 +61,41 @@ export function streamProxyUrl(rawUrl: string): string {
   return `${STREAM_SCHEME}://proxy/${encodeURIComponent(rawUrl)}`
 }
 
-export function registerStreamProtocol(): void {
-  protocol.handle(STREAM_SCHEME, async (request) => handleStreamRequest(request))
+/** Posters and thumbnails from the Internet Archive, kept inside the CSP. */
+export function imageProxyUrl(rawUrl: string): string {
+  return `${STREAM_SCHEME}://image/${encodeURIComponent(rawUrl)}`
 }
 
-async function handleStreamRequest(request: Request): Promise<Response> {
-  let parsed: URL
-  try {
-    parsed = new URL(request.url)
-  } catch {
-    return textResponse(400, 'Bad request')
-  }
+/** A caption sidecar on archive.org, converted to WebVTT on the way through. */
+export function subtitleRemoteUrl(rawUrl: string): string {
+  return `${STREAM_SCHEME}://subtitles/remote/${encodeURIComponent(rawUrl)}`
+}
+
+/** A caption file the user attached to a saved episode. */
+export function subtitleLocalUrl(identifier: string, episodeIndex: number): string {
+  return `${STREAM_SCHEME}://subtitles/local/${encodeURIComponent(identifier)}/${episodeIndex}`
+}
+
+export interface StreamProtocolOptions {
+  /** Resolves a subtitle file attached to a saved archive episode. */
+  resolveAttachedSubtitle?: (identifier: string, episodeIndex: number) => Promise<{ path: string; name: string } | null>
+}
+
+export function registerStreamProtocol(options: StreamProtocolOptions = {}): void {
+  protocol.handle(STREAM_SCHEME, async (request) => {
+    let parsed: URL
+    try {
+      parsed = new URL(request.url)
+    } catch {
+      return textResponse(400, 'Bad request')
+    }
+    if (parsed.hostname === 'image') return handleImageRequest(parsed)
+    if (parsed.hostname === 'subtitles') return handleSubtitleRequest(parsed, options)
+    return handleStreamRequest(request, parsed)
+  })
+}
+
+async function handleStreamRequest(request: Request, parsed: URL): Promise<Response> {
   if (parsed.hostname !== 'proxy') return textResponse(404, 'Unknown stream address')
 
   const target = safeDecode(parsed.pathname.replace(/^\//, ''))
@@ -144,6 +173,115 @@ async function handleStreamRequest(request: Request): Promise<Response> {
       'Content-Length': String(Buffer.byteLength(text, 'utf8'))
     }
   })
+}
+
+const imageCache = new Map<string, { type: string; body: ArrayBuffer }>()
+
+async function handleImageRequest(parsed: URL): Promise<Response> {
+  const target = safeDecode(parsed.pathname.replace(/^\//, ''))
+  const url = archiveOnlyUrl(target)
+  if (!url) return textResponse(400, 'Only archive.org images are proxied.')
+
+  const cached = imageCache.get(url)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: { ...CORS_HEADERS, 'Content-Type': cached.type, 'Cache-Control': 'public, max-age=86400' }
+    })
+  }
+
+  try {
+    const response = await net.fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'image/*' } })
+    if (!response.ok) return textResponse(response.status, 'Image unavailable')
+    const type = (response.headers.get('content-type') ?? 'image/jpeg').split(';')[0] ?? 'image/jpeg'
+    if (!type.startsWith('image/')) return textResponse(415, 'That is not an image.')
+    const length = Number(response.headers.get('content-length') ?? '0')
+    if (Number.isFinite(length) && length > IMAGE_LIMIT_BYTES) return textResponse(413, 'That image is too large.')
+    const body = await response.arrayBuffer()
+    if (body.byteLength > IMAGE_LIMIT_BYTES) return textResponse(413, 'That image is too large.')
+    if (imageCache.size > 300) imageCache.clear()
+    imageCache.set(url, { type, body })
+    return new Response(body, {
+      status: 200,
+      headers: { ...CORS_HEADERS, 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' }
+    })
+  } catch (error) {
+    return textResponse(502, `Could not load the image: ${describe(error)}`)
+  }
+}
+
+const subtitleCache = new Map<string, string>()
+
+async function handleSubtitleRequest(parsed: URL, options: StreamProtocolOptions): Promise<Response> {
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  const mode = segments[0]
+
+  if (mode === 'remote') {
+    const target = safeDecode(segments.slice(1).join('/'))
+    const url = archiveOnlyUrl(target)
+    if (!url) return textResponse(400, 'Only archive.org captions are proxied.')
+
+    const cached = subtitleCache.get(url)
+    if (cached) return vttResponse(cached)
+
+    try {
+      const response = await net.fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'text/plain, text/vtt, */*' } })
+      if (!response.ok) return textResponse(response.status, 'Captions unavailable')
+      const length = Number(response.headers.get('content-length') ?? '0')
+      if (Number.isFinite(length) && length > SUBTITLE_LIMIT_BYTES) return textResponse(413, 'That caption file is too large.')
+      const text = await response.text()
+      if (text.length > SUBTITLE_LIMIT_BYTES) return textResponse(413, 'That caption file is too large.')
+      if (text.trim().length === 0) return textResponse(404, 'This caption file is empty on archive.org.')
+      const vtt = toWebVtt(text)
+      if (!vtt.includes('-->')) return textResponse(422, 'That file does not contain subtitles.')
+      if (subtitleCache.size > 60) subtitleCache.clear()
+      subtitleCache.set(url, vtt)
+      return vttResponse(vtt)
+    } catch (error) {
+      return textResponse(502, `Could not load the captions: ${describe(error)}`)
+    }
+  }
+
+  if (mode === 'local') {
+    const identifier = safeDecode(segments[1] ?? '')
+    const index = Number(segments[2])
+    if (!identifier || !Number.isInteger(index) || index < 0) return textResponse(400, 'Bad subtitle request')
+    const attachment = await options.resolveAttachedSubtitle?.(identifier, index)
+    if (!attachment) return textResponse(404, 'No subtitle file is attached to this episode.')
+    try {
+      const stat = await fs.stat(attachment.path)
+      if (!stat.isFile()) return textResponse(404, 'That subtitle file is missing.')
+      if (stat.size > SUBTITLE_LIMIT_BYTES) return textResponse(413, 'That caption file is too large.')
+      const text = decodeSubtitleBytes(await fs.readFile(attachment.path))
+      const vtt = toWebVtt(text)
+      if (!vtt.includes('-->')) return textResponse(422, 'That file does not contain subtitles.')
+      return vttResponse(vtt)
+    } catch (error) {
+      return textResponse(500, `Could not read the subtitle file: ${describe(error)}`)
+    }
+  }
+
+  return textResponse(404, 'Unknown subtitle address')
+}
+
+function vttResponse(text: string): Response {
+  return new Response(text, {
+    status: 200,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'text/vtt; charset=utf-8' }
+  })
+}
+
+/** Restricts a URL to archive.org over https; used for images and captions. */
+function archiveOnlyUrl(rawUrl: string): string | null {
+  const url = normalizeStreamUrl(rawUrl)
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return null
+    return parsed.hostname === 'archive.org' || parsed.hostname.endsWith('.archive.org') ? url : null
+  } catch {
+    return null
+  }
 }
 
 function buildUpstreamHeaders(request: Request): Record<string, string> {

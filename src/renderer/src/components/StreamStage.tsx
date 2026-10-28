@@ -20,7 +20,10 @@ export function StreamStage(): ReactElement | null {
   const source = streams.current
   if (!source) return null
 
-  const docked = ui.route.name !== 'streams'
+  // Archive episodes use the same player; their full screen is where they were
+  // started, so the maximise button returns there rather than to Streams.
+  const home: 'archive' | 'streams' = source.id.startsWith('archive:') ? 'archive' : 'streams'
+  const docked = ui.route.name !== home
   const unsupported = source.kind === 'unsupported'
   const playing = streams.status === 'playing'
 
@@ -44,9 +47,9 @@ export function StreamStage(): ReactElement | null {
             <button
               type="button"
               className="btn-icon btn-icon-sm"
-              aria-label="Open the Streams screen"
-              title="Open the Streams screen"
-              onClick={() => ui.navigate({ name: 'streams' })}
+              aria-label={home === 'archive' ? 'Open the Archive screen' : 'Open the Streams screen'}
+              title={home === 'archive' ? 'Open the Archive screen' : 'Open the Streams screen'}
+              onClick={() => ui.navigate({ name: home })}
             >
               <MaximizeIcon size={13} />
             </button>
@@ -70,6 +73,13 @@ export function StreamStage(): ReactElement | null {
             source={source}
             onStatus={streams.setStatus}
             onError={streams.setError}
+            onCaptionError={(label) =>
+              ui.pushToast({
+                kind: 'info',
+                title: 'Captions unavailable',
+                message: `${label} could not be loaded from the source. Archive episodes accept your own .srt or .vtt file.`
+              })
+            }
           />
         )}
 

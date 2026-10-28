@@ -3,6 +3,7 @@ import { formatCount } from '@core/format'
 import { useData } from '../state/data'
 import { useUi } from '../state/ui'
 import {
+  ArchiveIcon,
   BookIcon,
   DevicesIcon,
   HeartIcon,
@@ -51,6 +52,10 @@ export function Sidebar(): ReactElement {
       <button type="button" className={`nav-item ${isActive('streams') ? 'active' : ''}`} onClick={() => ui.navigate({ name: 'streams' })}>
         <span className="nav-icon"><StreamsIcon size={16} /></span>
         <span className="nav-label">Streams</span>
+      </button>
+      <button type="button" className={`nav-item ${isActive('archive') ? 'active' : ''}`} onClick={() => ui.navigate({ name: 'archive' })}>
+        <span className="nav-icon"><ArchiveIcon size={16} /></span>
+        <span className="nav-label">Archive</span>
       </button>
       <button
         type="button"

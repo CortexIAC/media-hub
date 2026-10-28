@@ -1,6 +1,6 @@
 # Dependency and licence inventory
 
-Verified against `package.json` / `package-lock.json` and the installed `node_modules` on 27 October 2026.
+Verified against `package.json` / `package-lock.json` and the installed `node_modules` on 28 October 2026. No dependency was added for the Internet Archive tab: search, metadata, episode parsing, subtitle conversion and storage use built-in `fetch`/`TextDecoder` and the existing JSON store.
 
 ## Runtime dependencies (shipped inside the app bundle)
 
@@ -47,13 +47,13 @@ No GPL, LGPL or AGPL code is present in the shipped bundle.
 | --- | --- | --- | --- |
 | Open Library | `search.json` read API | no | Open Library API; catalogue data is CC0 |
 | Project Gutenberg | Gutendex (`gutendex.com`) | no | Gutendex is a community mirror of Gutenberg metadata |
-| Internet Archive | `advancedsearch.php` read API | no | IA developer APIs; per-item rights apply |
+| Internet Archive | `advancedsearch.php` (title search), `metadata/{identifier}` (item detail), `services/img/{identifier}` (posters), `download/{identifier}/{file}` (episode and caption playback through the app's proxy) | no | IA developer APIs; per-item/uploader rights apply. The app streams, never downloads; posters and captions are fetched only from archive.org |
 | LibriVox | IA collection `librivoxaudio` | no | Public-domain recordings |
 | YouTube | keyless `/youtubei/v1/search` (the request YouTube's own web player sends) plus optional Data API v3 `search.list` / `videos.list`; oEmbed for pasted links | no (key optional) | YouTube API Services Terms + Developer Policies. Playback only inside the official embedded IFrame player; no stream extraction, no background playback. The keyless search endpoint is undocumented and can change without notice — a key is the supported fallback |
 | LRCLIB | `/api/get`, `/api/search` | no | Free, open lyrics service ([lrclib.net](https://lrclib.net)); only title/artist/album/duration are sent |
 | User-supplied stream URLs | HTTP(S) GET with byte-range support, proxied through `bunny-stream:` | no | Whatever the source of the link sets. The app is a pass-through: it does not search trackers, resolve stream endpoints, cache media, or bundle any catalogue |
 
-No audio or text content is downloaded, cached or redistributed by the app. Catalogue results open in the user's browser; YouTube results play in YouTube's embedded player, which serves its own media; stream URLs are fetched live while you watch and are never written to disk.
+No audio or text content is downloaded, cached or redistributed by the app. Catalogue results open in the user's browser; YouTube results play in YouTube's embedded player, which serves its own media; stream URLs are fetched live while you watch and are never written to disk. Archive episodes stream the same way, posters are cached in memory for the session only, and a subtitle file you attach stays on your machine.
 
 `hls.js` is bundled into `out/renderer/assets/hls-*.js` and is Apache-2.0, so it adds no copyleft obligation to the shipped bundle.
 

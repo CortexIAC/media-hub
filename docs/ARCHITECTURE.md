@@ -34,6 +34,7 @@ Sprint 1: Electron 45 (Chromium 156, Node 24) + React 19 + TypeScript, bundled b
 | `providers.ts` | Provider descriptors and capability catalogue (what each service permits) |
 | `sync.ts` | Interfaces for a future synchronisation layer — types only, no fake networking |
 | `discovery.ts` | Online catalogue result shape plus pure helpers (normalise, dedupe, filter) |
+| `archive.ts` | Internet Archive item parsing: derivative dedupe, episode labelling/ordering, search ranking, subtitle matching, SRT→WebVTT, saved-record sanitising |
 
 Core is unit-tested without a window: queue behaviour, repeat/shuffle, controller transitions, backend error recovery, search ranking and the discovery helpers all run under vitest.
 
@@ -70,7 +71,7 @@ The renderer parses LRC timestamps with `core/lyrics.ts` (pure, unit-tested), hi
 
 ### Storage
 
-Four JSON stores (`JsonFile`) with atomic temp-file writes, corrupt-file quarantine, and schema sanitising on load. Nothing is written on every state tick: the renderer persists the playback session every 5 s and on hide/quit.
+Each feature owns a `JsonFile` store (library, playlists, settings, session, YouTube, streams, archive) with atomic temp-file writes, corrupt-file quarantine, and schema sanitising on load. Nothing is written on every state tick: the renderer persists the playback session every 5 s and on hide/quit.
 
 ### Providers and catalogue search
 
@@ -97,6 +98,19 @@ The player element is mounted once by the shell (`components/StreamStage.tsx`), 
 
 Mutual exclusion is explicit: starting a stream pauses local playback and stops YouTube; starting either of those stops the stream.
 
+### Internet Archive catalogue
+
+A separate screen, provider and store, because browsing a catalogue is a different interaction from pasting a stream URL.
+
+- `main/providers/archive.ts` queries `advancedsearch.php` (title matches only) and `metadata/{identifier}`. Results are parsed and ranked by pure functions in `core/archive.ts`, which also collapse derivative files (`.ia.mp4`, `_512kb`, `.ogv`) into one episode per recording, label episodes from file names, order them by season/episode, and match caption sidecars to the right file.
+- A typed search in a narrow collection that returns fewer than three hits is repeated against all film/TV, switches the collection chip and surfaces a "search widened" notice. This is a UI-level retry, not a silent fallback: the user can see the scope change.
+- `storage/archiveStore.ts` stores the selected item's metadata and stable file URLs plus subtitle attachments, never derived playback URLs. A saved show can therefore be replayed after a restart without re-resolving anything.
+- Episodes reuse the stream session: the archive state builds the same `StreamSourceView` and calls `streams.play`, so the stage/dock, VLC hand-off and mutual exclusion with music and YouTube all work unchanged. The stage's "maximise" button returns to Archive when the episode came from there.
+- `main/streamProtocol.ts` gained three restricted helpers on the existing scheme: `image` (posters, archive.org only, cached in memory), `subtitles/remote` (fetch and convert an item sidecar), and `subtitles/local` (read an attached file, converted on request). The scheme is already CORS-enabled and allowed by the CSP, so no new origin is exposed.
+- `StreamPlayer` renders a `<track>` when a source carries a `subtitleUrl`; a failed track hides itself and reports through `onCaptionError` instead of turning into a playback error.
+
+Details, endpoint table and limitations: [ARCHIVE.md](ARCHIVE.md).
+
 ### YouTube session and the docked player
 
 YouTube playback outlives any single view, so its state is not owned by a view:
@@ -120,7 +134,7 @@ YouTube playback outlives any single view, so its state is not owned by a view:
 - Preload exposes a narrow typed API (`window.bunny`); no ipcRenderer passthrough.
 - CSP locks scripts to `'self'` plus the YouTube IFrame API, media to `bunny-media:`/`bunny-stream:`/`blob:`, and frames to the YouTube embed domains. The policy is applied only to the app document, never to the embedded player's own document. No wildcard remote origin is allowed: network media is only ever addressed through the proxy scheme.
 - In production the built renderer is served from a loopback HTTP origin (`main/rendererServer.ts`, bound to 127.0.0.1 on a random port). A `file://` page has no origin or referrer, which the YouTube embed rejects; loopback keeps `contextIsolation`/`sandbox` unchanged and is unreachable from other machines.
-- Both custom schemes (`bunny-media:` for local files, `bunny-stream:` for remote streams) send `Access-Control-Allow-Origin` and are registered with CORS enabled. Web Audio refuses to read samples from cross-origin media, so without CORS the equalizer/boost graph silently mutes every track.
+- Both custom schemes (`bunny-media:` for local files, `bunny-stream:` for remote streams) send `Access-Control-Allow-Origin` and are registered with CORS enabled. The image and subtitle hosts on `bunny-stream:` accept only `https://archive.org` (or a subdomain), so they cannot be used as a general-purpose proxy by page content. Web Audio refuses to read samples from cross-origin media, so without CORS the equalizer/boost graph silently mutes every track.
 - Permission requests (camera, microphone, notifications) are denied.
 - External navigation is blocked; only validated http(s) URLs are handed to `shell.openExternal`.
 - The renderer performs no network requests: catalogue search, media reads and file access all happen in the main process.
@@ -131,7 +145,9 @@ These exist as interfaces or documentation, never as fake implementations:
 
 - `sync.ts` defines device identity, timeline and clock-sync shapes; no transport is implemented.
 - `providers.ts` describes Spotify, Apple Music, YouTube and Cinejoy capability by capability; only the catalogue sources listed above are wired up.
-- In-app browsing and downloads are not implemented. Network streams play from a URL the user supplies: there is no catalogue, indexer or tracker integration, and saved streams are URLs only (`storage/streamStore.ts`). YouTube queue and history live in `storage/youtubeStore.ts`; YouTube playlists do not exist yet (the playlist store is track-id based).
+- In-app browsing and downloads are not implemented. Network streams play from a URL the user supplies: there is no indexer or tracker integration, and saved streams are URLs only (`storage/streamStore.ts`). The Archive tab browses archive.org's public catalogue but still downloads nothing: episode URLs are streamed, not copied.
+- Archive pagination, splitting a single-file compilation into episodes, and automatic caption generation do not exist. Episode lists are capped at 800 files and search at 36 results per query.
+- YouTube queue and history live in `storage/youtubeStore.ts`; YouTube playlists do not exist yet (the playlist store is track-id based).
 
 ## Known performance characteristics
 

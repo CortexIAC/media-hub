@@ -11,6 +11,7 @@ import { PlaylistStore } from './storage/playlistStore'
 import { SessionStore, SettingsStore } from './storage/sessionStore'
 import { YouTubeStore } from './storage/youtubeStore'
 import { StreamStore } from './storage/streamStore'
+import { ArchiveStore } from './storage/archiveStore'
 import { seedSources } from '@core/streamSeeds'
 import { dataPaths, type DataPaths } from './storage/paths'
 import { startRendererServer, type RendererServer } from './rendererServer'
@@ -33,6 +34,7 @@ let settings: SettingsStore
 let session: SessionStore
 let youtube: YouTubeStore
 let streams: StreamStore
+let archive: ArchiveStore
 let scanner: ScannerService
 let scheduledScan: NodeJS.Timeout | null = null
 let quitting = false
@@ -47,6 +49,7 @@ const context: IpcContext = {
   session: undefined as unknown as SessionStore,
   youtube: undefined as unknown as YouTubeStore,
   streams: undefined as unknown as StreamStore,
+  archive: undefined as unknown as ArchiveStore,
   scanner: undefined as unknown as ScannerService,
   paths: undefined as unknown as DataPaths,
   getProgress: () => currentProgress,
@@ -89,7 +92,8 @@ if (gotLock) {
       settings?.flush() ?? Promise.resolve(),
       session?.flush() ?? Promise.resolve(),
       youtube?.flush() ?? Promise.resolve(),
-      streams?.flush() ?? Promise.resolve()
+      streams?.flush() ?? Promise.resolve(),
+      archive?.flush() ?? Promise.resolve()
     ]).finally(() => app.quit())
   })
 }
@@ -104,6 +108,7 @@ async function bootstrap(): Promise<void> {
   session = new SessionStore(paths.session)
   youtube = new YouTubeStore(paths.youtube)
   streams = new StreamStore(paths.streams)
+  archive = new ArchiveStore(paths.archive)
 
   await Promise.all([
     library.load(),
@@ -111,7 +116,8 @@ async function bootstrap(): Promise<void> {
     settings.load(),
     session.load(),
     youtube.load(),
-    streams.load()
+    streams.load(),
+    archive.load()
   ])
 
   // First launch only: offer the curated public streams so the screen is not
@@ -146,6 +152,7 @@ async function bootstrap(): Promise<void> {
     session,
     youtube,
     streams,
+    archive,
     scanner,
     paths,
     scanFolder,
@@ -156,7 +163,14 @@ async function bootstrap(): Promise<void> {
   })
 
   registerMediaProtocol(library, paths.root)
-  registerStreamProtocol()
+  registerStreamProtocol({
+    // Read the attached file at request time so moving or editing it is picked
+    // up without restarting the app.
+    resolveAttachedSubtitle: async (identifier, episodeIndex) => {
+      const attachment = archive.attachment(identifier, episodeIndex)
+      return attachment ? { path: attachment.path, name: attachment.name } : null
+    }
+  })
   registerIpc(context)
 
   // Production loads the built renderer over loopback HTTP so it has an origin

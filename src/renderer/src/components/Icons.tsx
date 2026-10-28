@@ -328,3 +328,27 @@ export const RefreshIcon = (p: IconProps) => (
     <path d="M20 5v6h-6" />
   </Icon>
 )
+
+export const ArchiveIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 9.5l8.5-5 8.5 5" />
+    <path d="M5 10.5v8.5M9.5 10.5v8.5M14.5 10.5v8.5M19 10.5v8.5" />
+    <path d="M3.5 19.5h17" />
+    <path d="M4 9.5h16" />
+  </Icon>
+)
+
+export const CaptionsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+    <path d="M10.5 10.2a2.4 2.4 0 1 0 0 3.6" />
+    <path d="M16.5 10.2a2.4 2.4 0 1 0 0 3.6" />
+  </Icon>
+)
+
+export const FilmIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+    <path d="M7.5 4.5v15M16.5 4.5v15M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21" />
+  </Icon>
+)

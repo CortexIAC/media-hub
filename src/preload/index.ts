@@ -76,6 +76,18 @@ const api: BunnyApi = {
     rename: (id, name) => ipcRenderer.invoke(IPC.streamsRename, id, name),
     markPlayed: (id) => ipcRenderer.invoke(IPC.streamsMarkPlayed, id),
     openExternal: (url) => ipcRenderer.invoke(IPC.streamsOpenExternal, url)
+  },
+  archive: {
+    search: (query, collection) => ipcRenderer.invoke(IPC.archiveSearch, query, collection),
+    item: (identifier) => ipcRenderer.invoke(IPC.archiveItem, identifier),
+    state: () => ipcRenderer.invoke(IPC.archiveState),
+    save: (item) => ipcRenderer.invoke(IPC.archiveSave, item),
+    remove: (identifier) => ipcRenderer.invoke(IPC.archiveRemove, identifier),
+    markPlayed: (identifier, episodeIndex) => ipcRenderer.invoke(IPC.archiveMarkPlayed, identifier, episodeIndex),
+    attachSubtitle: (identifier, episodeIndex) =>
+      ipcRenderer.invoke(IPC.archiveAttachSubtitle, identifier, episodeIndex),
+    removeSubtitle: (identifier, episodeIndex) =>
+      ipcRenderer.invoke(IPC.archiveRemoveSubtitle, identifier, episodeIndex)
   }
 }
 

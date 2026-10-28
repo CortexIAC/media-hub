@@ -10,7 +10,7 @@ What a third-party desktop app can legitimately do with each source, based on th
 | Open Library | yes | reading in browser | n/a | borrowing only | **implemented** (search + links) |
 | Project Gutenberg | yes | reading in browser | n/a | public domain only | **implemented** (with IA mirror fallback) |
 | LibriVox | yes | listening in browser | n/a | public domain only | **implemented** (search + links) |
-| Internet Archive | yes | streaming/embed available | yes | per item rights | **implemented** (search + links) |
+| Internet Archive | yes | **yes** — the archive's own file URLs, streamed in-app | yes | per item rights; the app streams, never downloads | **implemented** (search, item browser, labelled episodes, saved Shows/Movies, subtitles) |
 | YouTube | yes, no key needed | only in the official embedded player, visible | **prohibited** | **prohibited** | **implemented** (search + embedded playback) |
 | Spotify | yes, OAuth + Premium | only via Web Playback SDK (browser) | unverified outside a browser | no | not implemented |
 | Apple Music | yes, developer token | only via MusicKit (browser) | unverified | no | not implemented |
@@ -48,6 +48,14 @@ What a third-party desktop app can legitimately do with each source, based on th
 - **LibriVox**: public-domain audiobooks hosted on archive.org; search via the `librivoxaudio` collection.
 - Practical requirements: descriptive User-Agent, caching of search results, honouring 429/Backoff, and per-item rights review before offering anything beyond a link.
 
+### Internet Archive item playback
+
+- **What is used**: the public `advancedsearch.php` search API, `metadata/{identifier}` for files and rights, `services/img/{identifier}` for posters, and the item's own `download/{identifier}/{file}` URLs for playback and for caption sidecars. No authenticated endpoint, no scraping, no undocumented API.
+- **Episodes**: an item lists every derivative encoding of its files. The app deduplicates them to one entry per recording and labels each from its file name, so a show uploaded as `S01E01…`, `S01E02…` becomes a normal episode list. A single-file compilation is not split: that would require re-encoding or chapter data the item does not publish.
+- **Playback**: the file is fetched by the main process through the same `bunny-stream:` pass-through used for any network stream, with range support for seeking. Nothing is downloaded to disk or re-broadcast. Containers Chromium cannot decode go to VLC.
+- **Rights**: uploads are user-contributed; the item's licence is shown before saving and links to its archive.org page. The app does not claim the item is free to use beyond what the uploader stated, and it does not curate or recommend specific copyrighted content.
+- **Subtitles**: an item's own `.srt`/`.vtt` sidecar is offered when it matches the episode; otherwise the user can attach a local subtitle file to a saved episode. The app converts to WebVTT and serves it from its own scheme. It does not generate captions or fetch them from third-party subtitle sites.
+
 ## Network streams (VLC-style playback)
 
 This is the one area where the app behaves like a desktop player rather than a service client: it plays an http(s) address the user supplies, and never negotiates with a platform on the user's behalf.
@@ -71,6 +79,7 @@ PeerTube exposes a documented REST API (`/api/v1/videos`), and instances can be 
 ## What this build does
 
 1. Searches Open Library, Gutenberg (Gutendex, with an IA mirror fallback), LibriVox and Internet Archive from the Virtual Library and global search.
+1b. Browses the Internet Archive's film and TV catalogue in its own tab, saves shows and movies, and plays their episodes in-app — streamed from archive.org, never downloaded, with per-item rights shown before saving.
 2. Searches YouTube (keyless by default, Data API when a key is set) and plays the selected video in the official embedded player, with queue, saved videos and recent history.
 3. Shows every result with its access reality — "Read online", "Borrow or preview", "Listen on archive.org", "Open on YouTube" — rather than implying everything is playable.
 4. Never extracts audio, bypasses DRM, hides an ad-bearing player, or downloads copyrighted text.

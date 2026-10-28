@@ -12,18 +12,21 @@ npm run bench        # cold start and 300-track import measurement
 node scripts/check-youtube.mjs        # live YouTube search → embedded playback check
 node scripts/check-youtube-dock.mjs   # live: playback survives leaving the Video screen, search finds videos
 node scripts/check-streams.mjs        # live streams: loopback server, M3U import, HLS playback, MKV fallback
+node scripts/check-archive.mjs        # live Archive: real archive.org search, save, playback, captions, restart
 ```
 
 ## Automated results
 
 ```
-Unit + integration:  12 files, 166 tests, all passing (~28 s)
+Unit + integration:  13 files, 184 tests, all passing (~25 s)
 End-to-end:          1 file, 9 tests, all passing (~37 s; one 91 s run observed under machine load)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
 Live YouTube check:  search → select → player reaches "playing" (no API key configured)
 Live dock check:     plays on the Video stage, keeps playing docked on Music/Search, pauses when minimised
 Live stream check:   17/17 checks (preloaded radio, local server, real HLS playback, MKV hand-off)
+Live Archive check:  23/23 checks (real search, widened collection search, 13 labelled episodes, save,
+                     playback clock advances, attached SRT reaches 2 cues, restart persistence)
 ```
 
 Coverage by area:
@@ -39,6 +42,7 @@ Coverage by area:
 | YouTube search parsing | `tests/core/youtube.test.ts` | id/title/channel/duration mapping from a real-shaped payload, `simpleText` and run titles, `compactVideoRenderer`, hour-long durations, malformed/id-less entries skipped, duplicates removed, playlist/channel renderers ignored, HTML entity decoding, `2:26`/`LIVE` length parsing |
 | YouTube queue | `tests/core/youtubeQueue.test.ts` | play/replace, per-video dedupe, play-all from an index, next/previous with back-stack bounding, enqueue vs play-next, remove/clear/stop, advance only when something is queued |
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
+| Internet Archive parsing | `tests/library/archive.test.ts` | episode labels for `S01E02`, `1x07`, `Episode 12`, `Part 3` and leading numbers; derivative dedupe (original mp4 beats `.ia.mp4`/`_512kb`/`.ogv`); duration parsing (`14314.54`, `59:59`, `1:02:03.5`); item parsing with caption matching, dark items and path traversal; search-hit sanitising; relevance ranking; SRT and WebVTT conversion, UTF-16LE decoding; saved-record sanitising |
 | Stream storage | `tests/library/streamStore.test.ts` | first-launch seeding happens once and is remembered, a deleted suggestion stays deleted after reload, duplicate URLs collapse, rename/mark-played keep other fields, magnet links and duplicates are dropped on load |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
@@ -53,6 +57,7 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 - YouTube search and playback are checked by `scripts/check-youtube.mjs` and `scripts/check-youtube-dock.mjs`, not by the e2e suite, because they need live network and a third-party player. They fail loudly (non-zero exit) if search returns nothing, the player never reaches `playing`, the dock never appears, or the state does not survive the view change. The dock script also minimizes the window and asserts the player ends up `paused`; it shields the window from the real mouse so a person using the machine cannot skew the run.
 - One full e2e run out of three on 28 Oct 2026 failed three assertions (`Streams` text, accent token, and one earlier check) after running roughly twice as long as usual; two consecutive re-runs passed 9/9 at the normal duration. Treated as environment contention, not a regression, but it is recorded here rather than hidden.
 - The equalizer test measures samples at the node that feeds the speakers. It was added after a real defect: Web Audio outputs silence for cross-origin media, so an uncorsed `bunny-media://` scheme muted every track whenever any processing (EQ, bass or boost) was enabled while the clock kept advancing.
+- The Internet Archive tab is covered by `scripts/check-archive.mjs`, not the e2e suite, because it needs live archive.org data and a multi-hundred-megabyte video. It uses a temporary profile, shields the window from the real mouse, and exits non-zero on any missed check. It verified 23/23 on 28 October 2026, including a real playing state (`currentTime` > 1.5 s, 638×360 video) and a WebVTT track with two cues. The item's own caption files are *not* what it proves: archive.org's TV caption sidecars currently download as zero bytes (see [ARCHIVE.md](ARCHIVE.md)), so the verified subtitle path is the one users can rely on — attaching their own `.srt`/`.vtt`, which is served as WebVTT and survives a restart.
 - Network streams are covered by `scripts/check-streams.mjs`, not the e2e suite: the check needs a local HTTP server and a public HLS stream. Like the dock check, it sets `setIgnoreMouseEvents(true)` on the window, because a real click during a run can switch the stream mid-assertion (observed once: a person clicked NASA TV while the radio check was waiting for the clock to move). It exits non-zero on any missed check and prints `SKIP` for the public HLS check when the network is unavailable, so an offline run cannot be mistaken for a pass.
 
 ## Network stream verification (28 October 2026)
@@ -85,6 +90,37 @@ Known gaps in this coverage:
 - **Encrypted HLS was not played.** The `EXT-X-KEY` URI is rewritten and unit-tested; no AES-128 stream was fetched.
 - **Alternative renditions** (`EXT-X-MEDIA` audio/subtitle groups) go through the same rewriting rule but were not exercised against a real stream.
 - **Servers that demand a Referer or a browser User-Agent are refused.** That is deliberate; the app sends an honest User-Agent and reports the failure instead of impersonating a browser.
+
+## Internet Archive verification (28 October 2026)
+
+`npm run build && node scripts/check-archive.mjs` drives the built app against the live archive; no fixtures stand in for the catalogue.
+
+| Check | Result |
+| --- | --- |
+| browsing the cartoon shelf returns items (36 cards) | pass |
+| poster images resolve through `bunny-stream://image/…` | pass |
+| searching “angelina ballerina” finds the show outside `animationandcartoons` | pass |
+| a thin collection search widens to all film and says so | pass |
+| searching “barney” returns genuine items, closest title first | pass |
+| a multi-file show becomes individual, labelled episodes (`S01E01 · New Kid`) | pass |
+| episode metadata shows duration, size and format (`42:04 · 250 MB · MPEG4`) | pass |
+| rights are stated before saving | pass |
+| saving marks the title as part of the library | pass |
+| an attached SubRip file is accepted and converted | pass |
+| the episode reaches a real playing state (1.51 s in, 2524.8 s duration, 638×360) | pass |
+| the player stays on the Archive screen and names the episode | pass |
+| subtitles load with two cues from the attached file | pass |
+| the app actually restarts (new renderer `timeOrigin`, no stale toasts) | pass |
+| the saved show and its episode count survive the restart | pass |
+| the attached subtitle survives the restart | pass |
+
+Screenshots: `screenshots/19-archive-discover.png`, `20-archive-detail.png`, `21-archive-playing.png`, `22-archive-shows.png`.
+
+Not covered:
+
+- **Splitting a single-file compilation** — impossible without re-encoding or chapter metadata; deliberately not attempted.
+- **Item-supplied captions** — the pipeline exists (`subtitles/remote`, matching by base name), but the archive's caption files returned 0 bytes on every TV item sampled, so it could not be proven with real data. The attach path is what is verified.
+- **VLC hand-off from an archive episode** — same manual limitation as the Streams screen.
 
 ## Supported audio formats (tested)
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { StreamSourceView } from '@shared/ipc'
 import type { StreamPlaybackStatus } from '../state/streams'
 
@@ -6,6 +6,8 @@ interface StreamPlayerProps {
   source: StreamSourceView
   onStatus: (status: StreamPlaybackStatus) => void
   onError: (message: string | null) => void
+  /** A missing or empty caption sidecar is reported, but never blocks playback. */
+  onCaptionError?: (label: string) => void
 }
 
 interface HlsErrorPayload {
@@ -26,8 +28,15 @@ interface HlsErrorPayload {
  * security policy allows scripts only from 'self', and a blob worker would be
  * blocked silently.
  */
-export function StreamPlayer({ source, onStatus, onError }: StreamPlayerProps): ReactElement {
+export function StreamPlayer({ source, onStatus, onError, onCaptionError }: StreamPlayerProps): ReactElement {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [captionsFailed, setCaptionsFailed] = useState(false)
+
+  // A caption sidecar can be missing or empty on the remote side. That must not
+  // turn into a playback error: the episode still plays, just without captions.
+  useEffect(() => {
+    setCaptionsFailed(false)
+  }, [source.playUrl, source.subtitleUrl])
 
   useEffect(() => {
     const video = videoRef.current
@@ -110,7 +119,22 @@ export function StreamPlayer({ source, onStatus, onError }: StreamPlayerProps): 
         onError(describeMediaError(videoRef.current?.error))
         onStatus('error')
       }}
-    />
+    >
+      {source.subtitleUrl && !captionsFailed ? (
+        <track
+          key={source.subtitleUrl}
+          kind="subtitles"
+          src={source.subtitleUrl}
+          srcLang="en"
+          label={source.subtitleLabel ?? 'Captions'}
+          default
+          onError={() => {
+            setCaptionsFailed(true)
+            onCaptionError?.(source.subtitleLabel ?? 'Captions')
+          }}
+        />
+      ) : null}
+    </video>
   )
 }
 

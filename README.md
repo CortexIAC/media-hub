@@ -16,7 +16,7 @@ Three ways, depending on what you want:
 | Development with hot reload | `npm install` then `npm run dev` |
 | Run the built app | `npm run build` then `npm start` |
 
-`launch.cmd` installs dependencies and builds the app the first time, then starts Electron. After the first build you can also run `node_modules\.bin\electron .` from the project folder.
+`launch.cmd` installs dependencies the first time, rebuilds the app from the current source on every launch (so it never runs stale code), then starts Electron. You can also run `node_modules\.bin\electron .` after a manual `npm run build`.
 
 Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a desktop session with audio output. No account, key or network connection is required for local playback.
 

@@ -89,7 +89,7 @@ const publish = spawnSync('npx', ['electron-builder', '--win', '--publish', 'alw
 
 if (publish.status !== 0) {
   console.error(
-    '\nPublishing failed. GitHub's upload endpoint occasionally drops an asset mid-release; ' +
+    "\nPublishing failed. GitHub's upload endpoint occasionally drops an asset mid-release; " +
       're-running this command resumes the same release and uploads what is missing.'
   )
   process.exit(publish.status ?? 1)

@@ -10,6 +10,7 @@ Verified against `package.json` / `package-lock.json` and the installed `node_mo
 | react | 19.3.1 | MIT | UI |
 | react-dom | 19.3.1 | MIT | UI rendering |
 | music-metadata | 12.3.2 | MIT | Tag, duration and artwork parsing |
+| hls.js | 1.7.3 | Apache-2.0 | HLS (`.m3u8`) playback in the renderer; loaded as a separate lazily-imported chunk |
 
 Bundled transitively by the above (all permissive):
 
@@ -50,8 +51,11 @@ No GPL, LGPL or AGPL code is present in the shipped bundle.
 | LibriVox | IA collection `librivoxaudio` | no | Public-domain recordings |
 | YouTube | keyless `/youtubei/v1/search` (the request YouTube's own web player sends) plus optional Data API v3 `search.list` / `videos.list`; oEmbed for pasted links | no (key optional) | YouTube API Services Terms + Developer Policies. Playback only inside the official embedded IFrame player; no stream extraction, no background playback. The keyless search endpoint is undocumented and can change without notice — a key is the supported fallback |
 | LRCLIB | `/api/get`, `/api/search` | no | Free, open lyrics service ([lrclib.net](https://lrclib.net)); only title/artist/album/duration are sent |
+| User-supplied stream URLs | HTTP(S) GET with byte-range support, proxied through `bunny-stream:` | no | Whatever the source of the link sets. The app is a pass-through: it does not search trackers, resolve stream endpoints, cache media, or bundle any catalogue |
 
-No audio or text content is downloaded, cached or redistributed by the app. Catalogue results open in the user's browser; YouTube results play in YouTube's embedded player, which serves its own media.
+No audio or text content is downloaded, cached or redistributed by the app. Catalogue results open in the user's browser; YouTube results play in YouTube's embedded player, which serves its own media; stream URLs are fetched live while you watch and are never written to disk.
+
+`hls.js` is bundled into `out/renderer/assets/hls-*.js` and is Apache-2.0, so it adds no copyleft obligation to the shipped bundle.
 
 ## Updating this document
 

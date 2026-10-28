@@ -1,6 +1,6 @@
 # Bunny Media Hub — Sprint 1 report
 
-Status: **complete for the defined Sprint 1 scope**, plus the requested equalizer and online catalogue/search work.
+Status: **complete for the defined Sprint 1 scope**, plus the requested equalizer, online catalogue/search work and network stream playback.
 
 ## 1. What was delivered
 
@@ -20,6 +20,7 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 - Robust handling of missing files, unreadable folders, corrupt and empty files, and recognised-but-unsupported extensions.
 - Virtual Library: Open Library, Project Gutenberg (+ Internet Archive mirror fallback), LibriVox, Internet Archive search; catalogue results open in the browser.
 - Online results also appear in global search, so artists outside the local library are no longer "not found".
+- Network streams: paste a direct media URL, an HLS playlist or an M3U/PLS channel list; links are probed before saving, channel lists expand into entries, media is proxied through `bunny-stream:` with range support, and containers Chromium cannot decode (MKV/AVI/MPEG-TS/HEVC) hand off to VLC. The player docks so a stream keeps playing while browsing.
 - One-click Windows launcher (`launch.cmd`).
 
 ### Implemented but limited
@@ -31,7 +32,7 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 
 ### Planned, not implemented
 
-Video playback, in-app browser tabs, Spotify/Apple Music, Cinejoy, network streams, downloads, Bunny Sync, device/multi-speaker sync, cloud accounts, subscriptions, AI playlists. Interfaces and capability documentation exist for these; no fake implementations.
+A browsable video catalogue beyond YouTube, in-app browser tabs, Spotify/Apple Music, Cinejoy, torrent/indexer APIs, downloads, Bunny Sync, device/multi-speaker sync, cloud accounts, subscriptions, AI playlists. Interfaces and capability documentation exist for these; no fake implementations.
 
 ## 2. Architecture summary
 
@@ -42,17 +43,19 @@ Layers are separated as required: application (renderer views/state/theme), core
 ```bash
 npm install
 npm run typecheck        # clean
-npm test                 # 115 tests / 9 files, pass
+npm test                 # 157 tests / 11 files, pass
 npm run build            # clean production build
 npm run test:e2e         # 9 tests, pass, screenshots written
 npm run bench            # startup + 300-track import numbers
 node scripts/check-discovery.mjs   # live catalogue smoke test
 node scripts/check-youtube.mjs     # live YouTube search → embedded playback
+node scripts/check-streams.mjs     # live streams: loopback server, M3U import, HLS playback
 ```
 
 ## 4. Automated test results
 
-- Unit/integration: **115 passed** (queue, player controller, search, discovery helpers, lyrics parsing, YouTube search parsing, scanner, persistence, byte ranges).
+- Unit/integration: **157 passed** (queue, player controller, search, discovery helpers, lyrics parsing, YouTube search parsing, network stream parsing/HLS rewriting, scanner, persistence, byte ranges).
+- Live stream harness: **14/14 checks** — M3U import, real audio through the proxy, playback surviving navigation, MKV hand-off, HLS rewriting, and real HLS playback through hls.js.
 - End-to-end: **9 passed** (launch, import, MP3 playback/transport, FLAC playback, lyrics, equalizer + bass/boost + AudioContext resume, Virtual Library, queue/favorites/playlists/search/settings, restart persistence, clean shutdown).
 - One transient e2e timeout occurred once in four full runs; it passed on immediate re-run. Documented in [TESTING.md](TESTING.md).
 
@@ -66,7 +69,7 @@ Real audio was audible for MP3, WAV and FLAC; seek, volume, next/previous and se
 
 ## 7. Screenshots
 
-`screenshots/01`–`14`: empty state, music library, album, now playing, queue, playlist, search, library, streams, settings, restored library, equalizer, virtual library, and YouTube search + embedded playback.
+`screenshots/01`–`14`: empty state, music library, album, now playing, queue, playlist, search, library, streams, settings, restored library, equalizer, virtual library, and YouTube search + embedded playback. `15`–`17`: YouTube stage, docked playback and search results. `18`–`20`: stream stage with real audio, docked stream, and the MKV hand-off state.
 
 ## 8. Performance
 
@@ -84,6 +87,7 @@ Cold start ≈ 0.65–0.70 s. 300-track import ≈ 1.0–1.4 s (3–5 ms/track) 
 7. E2E playback assertions are timing-sensitive on a fresh build (two flakes observed across runs, both passing on re-run).
 8. Artwork is cached at full embedded resolution; very large embedded images are stored as-is (12 MB cap).
 9. No packaging/installer: `npm start` and `launch.cmd` run the app from source/build output.
+10. Streams: the VLC hand-off is not automated in the harness (it would open a real player window); encrypted HLS, alternative audio renditions and DRM-protected sources are not exercised. Stream servers that require a Referer or a browser User-Agent are refused by design. No torrent/magnet or indexer support.
 
 ## 10. Version control
 
@@ -104,4 +108,5 @@ The working tree is committed at the end of the sprint; see `git log --oneline` 
 - **"Mari Glock" not appearing**: the app previously searched only local files. Global search now also queries the online catalogues, and the Video screen searches YouTube without any key. Copyrighted commercial music still cannot be streamed as audio by any legal free catalogue; YouTube play happens in YouTube's own player.
 - **YouTube while browsing**: the player is now mounted once by the shell and docks to the corner on every other screen, so a video keeps playing while you browse (and global search returns playable YouTube results). It pauses when the window is minimised — that is the line YouTube's API terms draw, not a missing feature. True background playback is not available under those terms.
 - **Cinejoy**: no public API or developer programme found for cinejoy.pk, so nothing is integrated; adding it needs a partner agreement.
+- **Network streams / "the VLC aspect"**: implemented as a real player for links you supply — direct media, HLS and M3U/PLS lists — with a VLC hand-off for containers Chromium cannot decode. It is not a "search the internet for a stream" feature: indexer APIs, torrent/magnet links and scraped endpoints are deliberately absent, so the app never becomes a content source it cannot justify. Formats verified: HLS (public test stream) and WAV (local server) play in-app; MKV is refused in-app and offered to VLC.
 - **Books**: the Virtual Library covers public-domain catalogues. *The Missing* (Margaret Peterson Haddix) is in copyright — Open Library links to legal borrowing, and a local library card via Libby/OverDrive is the free route.

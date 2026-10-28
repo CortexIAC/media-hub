@@ -1,8 +1,8 @@
 # Bunny Media Hub
 
-A desktop media application for the Bunny ecosystem: a local music player first, with public-catalogue discovery (books, audiobooks, archive audio and film) built on documented APIs.
+A desktop media application for the Bunny ecosystem: a local music player first, with public-catalogue discovery (books, audiobooks, archive audio and film) and network stream playback built on documented APIs.
 
-Sprint 1 scope is a reliable local music player, an equalizer, and honest catalogue search. Video playback, Spotify/Apple Music libraries and device sync are designed for but **not implemented** — see [docs/SPRINT1-REPORT.md](docs/SPRINT1-REPORT.md).
+Sprint 1 scope is a reliable local music player, an equalizer, honest catalogue search and a working network stream player. Spotify/Apple Music libraries and device sync are designed for but **not implemented** — see [docs/SPRINT1-REPORT.md](docs/SPRINT1-REPORT.md).
 
 ![Music library](screenshots/02-music-library.png)
 
@@ -29,12 +29,13 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Lyrics**: embedded tags, `.lrc`/`.txt` sidecar files, and an LRCLIB lookup as a fallback, with synced lines following the playhead in Now Playing.
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
 - **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive.
+- **Streams**: paste a direct media URL, an HLS (`.m3u8`) playlist or an M3U/PLS channel list. Links are checked before they are saved, a channel list is expanded into entries, and playback survives leaving the screen (the player docks to the corner). Formats Chromium cannot decode — MKV, AVI, MPEG-TS, HEVC — are handed to VLC with the same URL instead of failing silently.
 - **YouTube**: search with no key at all — from the Video screen or the search field at the top — then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. The player docks to the corner while you browse other screens (a video keeps playing while you look through the library, and it stays visible on purpose: YouTube's terms forbid hidden playback). A Data API key is optional and only changes the search path.
 - **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
 
 ## What is planned, not built
 
-Video from anywhere other than YouTube, Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
+A browsable video catalogue beyond YouTube, Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts, torrent/indexer metadata APIs. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
 
 ## Commands
 
@@ -43,12 +44,13 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 132 unit tests (vitest)
+npm test             # 157 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
 node scripts/check-youtube.mjs        # live YouTube search → real playback check (needs a build)
 node scripts/check-youtube-dock.mjs   # live check that playback survives leaving the Video screen
+node scripts/check-streams.mjs        # live stream check: local server + M3U import + HLS playback
 ```
 
 End-to-end tests drive the real Electron app with Playwright, import a generated fixture library, play MP3/WAV/FLAC audio, restart the app and verify persistence. Screenshots are written to `screenshots/`.
@@ -66,6 +68,7 @@ library.json     folders, tracks (including lyrics found at scan time), last sca
 playlists.json   playlists and favorites
 settings.json    volume, equalizer curve, boost, bass, accent, YouTube key
 session.json     last track, queue and position
+streams.json     saved network stream links (URLs only, never media)
 artwork/         cached cover images (deduplicated by hash)
 ```
 
@@ -75,6 +78,7 @@ Settings → Library → **Open data folder** takes you there.
 
 - Open Library, Project Gutenberg, LibriVox and the Internet Archive are queried through their public read APIs, with a descriptive User-Agent, bounded timeouts and no retries in a loop.
 - YouTube search needs no key: it uses the same public search request YouTube's own web player makes, and falls back to the documented Data API v3 when you add a key. Playback always happens in the official embedded player, because YouTube's developer policies forbid extracting audio, hiding the player or background playback. On the Video screen that player is the stage; elsewhere it docks into the corner, still on screen and still at least 366×206 px. Minimising the window pauses it. No stream URL is ever resolved.
+- Streams are links **you** supply. The app does not search trackers, resolve stream endpoints, bundle a catalogue or scrape indexers; it plays an http(s) URL you paste, or the channel entries inside an M3U/PLS list you import. Media is fetched by the main process through the app's own `bunny-stream:` protocol, which is a pass-through — nothing is downloaded to disk, cached, or re-broadcast. Rights to the content remain yours to check, exactly as with a browser or VLC.
 - Lyrics come from your files first. When neither a tag nor a sidecar file exists, the app asks [LRCLIB](https://lrclib.net), a free open lyrics service; only the track title, artist, album and duration are sent.
 - Copyrighted books (for example Margaret Peterson Haddix's *The Missing* series) are **not** downloadable here. Open Library links to legal borrowing; your local library's Libby/OverDrive catalogue is the usual free route.
 
@@ -104,3 +108,5 @@ docs/            architecture, testing, dependencies, provider feasibility, spri
 - **No sound**: check the volume slider in the player bar, then Windows volume mixer. The equalizer never mutes the output — with it disabled, audio goes straight to the device.
 - **A file will not play**: the row shows the decoder error. FLAC/MP3/WAV are verified; M4A/AAC/OGG/Opus/WebM are accepted by the scanner but not yet playback-verified in this build.
 - **Catalogue search shows an error**: the public API is unreachable or rate-limiting. Local playback is unaffected.
+- **A stream says it needs an external player**: Chromium has no decoder for that container (MKV, AVI, MPEG-TS, HEVC). Use **Open in VLC** on the row; VLC is launched with the same URL when installed, otherwise your default handler opens it.
+- **A stream does not play but the link works in a browser**: many stream servers require a referer or block non-browser user agents. The app sends a plain descriptive User-Agent and no spoofed referer, so those links are reported as errors rather than silently retried.

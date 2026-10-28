@@ -755,3 +755,369 @@
     right: 12px;
   }
 }
+
+/* Network streams ------------------------------------------------------- */
+
+.section-count {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+}
+
+.section-note {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: -4px 0 14px;
+  max-width: 74ch;
+}
+
+.stream-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.stream-add-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stream-add-input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Cascadia Mono', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.stream-add-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+.stream-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-faint);
+}
+
+.stream-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.stream-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.stream-group-head h3 {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.stream-group-count {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.stream-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.stream-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stream-row.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.stream-play {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: -3px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stream-play:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.stream-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.35;
+}
+
+.stream-row-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-row-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-row-live {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.stream-row-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.stream-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.stream-examples {
+  display: inline-block;
+  text-align: left;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.9;
+}
+
+.stream-capabilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.stream-capabilities p {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.stream-capability-title {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.badge.is-live {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/*
+ * The stream player is one element the shell mounts once: the stage on the
+ * Streams screen, a corner dock everywhere else. Same pattern as the YouTube
+ * host, for the same reason — remounting would stop playback.
+ */
+.stream-host.is-stage {
+  flex: none;
+  /* Bounded by height so the list below stays reachable on a 640px window, and
+     by width so a wide monitor does not turn an audio stream into a cinema. */
+  width: min(100%, calc(34vh * 16 / 9), 620px);
+  padding: 20px 34px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stream-host.is-dock {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--playerbar-height) + 16px);
+  z-index: 41;
+  width: 384px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: rgba(12, 16, 14, 0.96);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.55);
+}
+
+.stream-frame {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+}
+
+.stream-host.is-dock .stream-frame {
+  border-radius: var(--radius-sm);
+}
+
+.stream-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+}
+
+.stream-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  text-align: center;
+  background: rgba(6, 9, 8, 0.78);
+  pointer-events: none;
+}
+
+.stream-overlay.is-error {
+  pointer-events: auto;
+  background: rgba(6, 9, 8, 0.92);
+}
+
+.stream-error-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stream-error-body {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 46ch;
+}
+
+.stream-stage-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stream-host.is-dock .stream-stage-meta {
+  display: none;
+}
+
+.stream-stage-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.stream-stage-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-stage-url {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-dock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.stream-dock-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.stream-dock-eyebrow {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.stream-dock-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-dock-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .stream-host.is-stage {
+    width: 100%;
+    padding: 16px 16px 0;
+  }
+  .stream-host.is-dock {
+    width: calc(100% - 24px);
+    right: 12px;
+  }
+  .stream-add-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

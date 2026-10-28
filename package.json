@@ -15,9 +15,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
+    "check:streams": "node scripts/check-streams.mjs",
     "bench": "npm run build && node scripts/benchmark.mjs"
   },
   "dependencies": {
+    "hls.js": "^1.7.3",
     "music-metadata": "^12.3.2"
   },
   "devDependencies": {

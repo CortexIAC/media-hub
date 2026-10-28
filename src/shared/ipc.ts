@@ -14,6 +14,7 @@ import type {
 } from '@core/models'
 import type { DiscoveryKind, DiscoveryResponse } from '@core/discovery'
 import type { YouTubeVideo } from '@core/youtube'
+import type { StreamKind, StreamSource } from '@core/streams'
 import type { ProviderDescriptor } from '@core/providers'
 
 export const IPC = {
@@ -59,7 +60,14 @@ export const IPC = {
   youtubeResolve: 'youtube:resolve',
   youtubeState: 'youtube:state',
   youtubeToggleFavorite: 'youtube:toggle-favorite',
-  youtubeHistoryAdd: 'youtube:history-add'
+  youtubeHistoryAdd: 'youtube:history-add',
+
+  streamsState: 'streams:state',
+  streamsAdd: 'streams:add',
+  streamsRemove: 'streams:remove',
+  streamsRename: 'streams:rename',
+  streamsMarkPlayed: 'streams:mark-played',
+  streamsOpenExternal: 'streams:open-external'
 } as const
 
 export interface ImportResult {
@@ -117,6 +125,31 @@ export interface YouTubeResolveResult {
 export interface YouTubeLibraryView {
   favorites: YouTubeVideo[]
   history: YouTubeVideo[]
+}
+
+export interface StreamSourceView extends StreamSource {
+  /** Ready-to-use `bunny-stream:` URL; the renderer never builds one itself. */
+  playUrl: string
+  /** Set when the link cannot be decoded in-app, so the UI can explain why. */
+  unsupportedReason: string | null
+}
+
+export interface StreamsViewState {
+  sources: StreamSourceView[]
+}
+
+export interface StreamAddResult {
+  ok: boolean
+  added: number
+  skipped: number
+  state: StreamsViewState
+  error: string | null
+}
+
+export interface StreamExternalResult {
+  ok: boolean
+  player: 'vlc' | 'system' | null
+  error: string | null
 }
 
 export interface LyricsResult {
@@ -189,6 +222,14 @@ export interface BunnyApi {
     toggleFavorite(video: YouTubeVideo): Promise<YouTubeLibraryView>
     addHistory(video: YouTubeVideo): Promise<YouTubeLibraryView>
   }
+  streams: {
+    state(): Promise<StreamsViewState>
+    add(url: string, name?: string): Promise<StreamAddResult>
+    remove(id: string): Promise<StreamsViewState>
+    rename(id: string, name: string): Promise<StreamsViewState>
+    markPlayed(id: string): Promise<StreamsViewState>
+    openExternal(url: string): Promise<StreamExternalResult>
+  }
 }
 
-export type { Track, YouTubeVideo }
+export type { Track, YouTubeVideo, StreamSource, StreamKind }

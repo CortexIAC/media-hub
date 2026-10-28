@@ -15,6 +15,7 @@ What a third-party desktop app can legitimately do with each source, based on th
 | Spotify | yes, OAuth + Premium | only via Web Playback SDK (browser) | unverified outside a browser | no | not implemented |
 | Apple Music | yes, developer token | only via MusicKit (browser) | unverified | no | not implemented |
 | Cinejoy (cinejoy.pk) | no public API found | no | no | no | not integrated |
+| Stream links you supply (HTTP, HLS, M3U/PLS lists) | n/a — you bring the URL | **yes** in-app for MP4/WebM/audio and HLS | yes (the player stays visible and docked) | no | **implemented** (in-app player, plus VLC hand-off for undecodable containers) |
 
 ## YouTube
 
@@ -46,6 +47,17 @@ What a third-party desktop app can legitimately do with each source, based on th
 - **Project Gutenberg**: no official JSON API. Gutendex is the common community mirror; where it is unreachable (as on this network), the Internet Archive `gutenberg` text collection provides the same public-domain texts.
 - **LibriVox**: public-domain audiobooks hosted on archive.org; search via the `librivoxaudio` collection.
 - Practical requirements: descriptive User-Agent, caching of search results, honouring 429/Backoff, and per-item rights review before offering anything beyond a link.
+
+## Network streams (VLC-style playback)
+
+This is the one area where the app behaves like a desktop player rather than a service client: it plays an http(s) address the user supplies, and never negotiates with a platform on the user's behalf.
+
+- **Supported in-app**: direct MP4/H.264, WebM, MP3/AAC/FLAC/WAV over HTTP(S), and HLS (`.m3u8`) including adaptive variants through hls.js. Channel lists in M3U/PLS form are parsed as lists, not played; an HLS playlist is kept as one stream. Byte-range seeking works when the server supports `Range`.
+- **Handed to VLC**: MKV, AVI, MPEG-TS, HEVC and other containers Chromium does not demux. VLC is spawned with the same URL when installed; otherwise the system handler opens it. Pretending these play in-app would only produce a bare decoder error.
+- **Transport**: media is fetched by the main process through the `bunny-stream:` proxy, which is a pass-through (range forwarding, playlist rewriting for HLS, CORS so Web Audio can read samples). Nothing is downloaded, cached to disk or re-broadcast, and no URL is resolved from a page or a player API.
+- **Deliberately not implemented**: torrent/magnet links and indexer APIs (Prowlarr, Jackett or Stremio-style addons). Those return torrent, NZB or obfuscated stream references rather than a playable http(s) URL, so supporting them would mean building a BitTorrent client inside the app and treating an indexer as the content source. That is a different product with its own legal exposure, and it is not what this screen does. Anything that is not an http(s) URL is rejected with a message rather than half-supported.
+- **Also not implemented**: DRM handling, credential/token negotiation for subscription services, scraping stream endpoints out of web pages, and spoofing a browser Referer to bypass a host's restrictions. If a host refuses the app's honest User-Agent, the app reports the failure.
+- **Rights**: because the app is a pass-through, whether a stream may be watched or listened to remains the user's responsibility, exactly as it is with a browser, VLC or `curl`. Nothing is curated, bundled or recommended by the app.
 
 ## Cinejoy / cinejoy.pk
 

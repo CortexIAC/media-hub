@@ -2,13 +2,29 @@ import { promises as fs } from 'node:fs'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { AppSettings, PlaybackSession, ScanProgress } from '@core/models'
 import { PROVIDER_CATALOG } from '@core/providers'
-import { IPC, type AppInfo, type ImportResult, type LibraryViewState, type LyricsResult, type ResolvedTrackSource, type VerifyResult } from '@shared/ipc'
+import {
+  IPC,
+  type AppInfo,
+  type ImportResult,
+  type LibraryViewState,
+  type LyricsResult,
+  type ResolvedTrackSource,
+  type StreamAddResult,
+  type StreamExternalResult,
+  type StreamsViewState,
+  type VerifyResult
+} from '@shared/ipc'
+import { classifyStream } from '@core/streams'
 import type { LibraryStore } from './storage/libraryStore'
 import type { PlaylistStore } from './storage/playlistStore'
 import type { SessionStore, SettingsStore } from './storage/sessionStore'
 import type { DataPaths } from './storage/paths'
 import type { ScannerService } from './library/scannerService'
 import { trackUrl } from './mediaProtocol'
+import { streamProxyUrl } from './streamProtocol'
+import { addStreamFromUrl } from './providers/streams'
+import { openStreamExternally } from './externalPlayer'
+import type { StreamStore } from './storage/streamStore'
 import { searchCatalogues } from './providers'
 import { fetchLyrics } from './providers/lyrics'
 import { resolveYouTubeVideo, searchYouTubeKeyless, searchYouTubeVideos } from './providers/youtube'
@@ -24,6 +40,7 @@ export interface IpcContext {
   settings: SettingsStore
   session: SessionStore
   youtube: YouTubeStore
+  streams: StreamStore
   scanner: ScannerService
   paths: DataPaths
   getProgress: () => ScanProgress | null
@@ -36,8 +53,20 @@ export function buildLibraryState(context: IpcContext): LibraryViewState {
   return { ...context.library.snapshot(), scanning: context.getProgress() }
 }
 
+function buildStreamsState(store: StreamStore): StreamsViewState {
+  return {
+    sources: store.sources.map((source) => ({
+      ...source,
+      playUrl: streamProxyUrl(source.url),
+      // Recomputed rather than stored: the explanation belongs to the current
+      // build, not to whatever version first saved the link.
+      unsupportedReason: source.kind === 'unsupported' ? classifyStream(source.url).reason : null
+    }))
+  }
+}
+
 export function registerIpc(context: IpcContext): void {
-  const { library, playlists, settings, session, youtube, scanner, paths } = context
+  const { library, playlists, settings, session, youtube, streams, scanner, paths } = context
   const lyricsCache = new Map<string, LyricsResult | null>()
 
   ipcMain.handle(IPC.libraryGet, () => buildLibraryState(context))
@@ -365,6 +394,47 @@ export function registerIpc(context: IpcContext): void {
     if (lyricsCache.size > 500) lyricsCache.clear()
     lyricsCache.set(trackId, result)
     return result
+  })
+
+  ipcMain.handle(IPC.streamsState, (): StreamsViewState => buildStreamsState(streams))
+
+  ipcMain.handle(IPC.streamsAdd, async (_event, rawUrl: string, name?: string): Promise<StreamAddResult> => {
+    const result = await addStreamFromUrl(String(rawUrl ?? ''), typeof name === 'string' ? name : undefined)
+    if (result.added.length === 0) {
+      return { ok: false, added: 0, skipped: result.skipped, state: buildStreamsState(streams), error: result.error }
+    }
+    const commit = streams.add(result.added)
+    await streams.flush()
+    return {
+      ok: true,
+      added: commit.added.length,
+      skipped: commit.skipped + result.skipped,
+      state: buildStreamsState(streams),
+      // A saved-but-unplayable link still carries its explanation.
+      error: result.error
+    }
+  })
+
+  ipcMain.handle(IPC.streamsRemove, async (_event, id: string): Promise<StreamsViewState> => {
+    streams.remove(String(id))
+    await streams.flush()
+    return buildStreamsState(streams)
+  })
+
+  ipcMain.handle(IPC.streamsRename, async (_event, id: string, name: string): Promise<StreamsViewState> => {
+    streams.rename(String(id), String(name ?? ''))
+    await streams.flush()
+    return buildStreamsState(streams)
+  })
+
+  ipcMain.handle(IPC.streamsMarkPlayed, async (_event, id: string): Promise<StreamsViewState> => {
+    streams.markPlayed(String(id))
+    await streams.flush()
+    return buildStreamsState(streams)
+  })
+
+  ipcMain.handle(IPC.streamsOpenExternal, async (_event, url: string): Promise<StreamExternalResult> => {
+    return openStreamExternally(String(url ?? ''))
   })
 }
 

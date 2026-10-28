@@ -5,15 +5,18 @@ import { IPC } from '@shared/ipc'
 import { registerIpc, buildLibraryState, type IpcContext } from './ipc'
 import { ScannerService } from './library/scannerService'
 import { registerMediaProtocol, registerMediaScheme, isInternalUrl } from './mediaProtocol'
+import { registerStreamProtocol, registerStreamScheme } from './streamProtocol'
 import { LibraryStore } from './storage/libraryStore'
 import { PlaylistStore } from './storage/playlistStore'
 import { SessionStore, SettingsStore } from './storage/sessionStore'
 import { YouTubeStore } from './storage/youtubeStore'
+import { StreamStore } from './storage/streamStore'
 import { dataPaths, type DataPaths } from './storage/paths'
 import { startRendererServer, type RendererServer } from './rendererServer'
 
 app.setName('Bunny Media Hub')
 registerMediaScheme()
+registerStreamScheme()
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -28,6 +31,7 @@ let playlists: PlaylistStore
 let settings: SettingsStore
 let session: SessionStore
 let youtube: YouTubeStore
+let streams: StreamStore
 let scanner: ScannerService
 let scheduledScan: NodeJS.Timeout | null = null
 let quitting = false
@@ -41,6 +45,7 @@ const context: IpcContext = {
   settings: undefined as unknown as SettingsStore,
   session: undefined as unknown as SessionStore,
   youtube: undefined as unknown as YouTubeStore,
+  streams: undefined as unknown as StreamStore,
   scanner: undefined as unknown as ScannerService,
   paths: undefined as unknown as DataPaths,
   getProgress: () => currentProgress,
@@ -82,7 +87,8 @@ if (gotLock) {
       playlists?.flush() ?? Promise.resolve(),
       settings?.flush() ?? Promise.resolve(),
       session?.flush() ?? Promise.resolve(),
-      youtube?.flush() ?? Promise.resolve()
+      youtube?.flush() ?? Promise.resolve(),
+      streams?.flush() ?? Promise.resolve()
     ]).finally(() => app.quit())
   })
 }
@@ -96,8 +102,16 @@ async function bootstrap(): Promise<void> {
   settings = new SettingsStore(paths.settings)
   session = new SessionStore(paths.session)
   youtube = new YouTubeStore(paths.youtube)
+  streams = new StreamStore(paths.streams)
 
-  await Promise.all([library.load(), playlists.load(), settings.load(), session.load(), youtube.load()])
+  await Promise.all([
+    library.load(),
+    playlists.load(),
+    settings.load(),
+    session.load(),
+    youtube.load(),
+    streams.load()
+  ])
 
   scanner = new ScannerService({
     workerPath: join(__dirname, 'scannerWorker.js'),
@@ -122,6 +136,7 @@ async function bootstrap(): Promise<void> {
     settings,
     session,
     youtube,
+    streams,
     scanner,
     paths,
     scanFolder,
@@ -132,6 +147,7 @@ async function bootstrap(): Promise<void> {
   })
 
   registerMediaProtocol(library, paths.root)
+  registerStreamProtocol()
   registerIpc(context)
 
   // Production loads the built renderer over loopback HTTP so it has an origin
@@ -235,10 +251,12 @@ function applySecurityPolicy(): void {
     // else may execute.
     "script-src 'self' https://www.youtube.com https://s.ytimg.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' bunny-media: data: blob: https://i.ytimg.com https://img.youtube.com",
-    "media-src 'self' bunny-media: blob:",
+    "img-src 'self' bunny-media: bunny-stream: data: blob: https://i.ytimg.com https://img.youtube.com",
+    // Remote stream media is only ever addressed through the app's own proxy
+    // scheme, so no wildcard remote origin is needed here.
+    "media-src 'self' bunny-media: bunny-stream: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://www.youtube.com https://www.googleapis.com",
+    "connect-src 'self' bunny-stream: https://www.youtube.com https://www.googleapis.com",
     "object-src 'none'",
     "base-uri 'none'",
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com"

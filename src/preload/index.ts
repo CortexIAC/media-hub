@@ -67,6 +67,14 @@ const api: BunnyApi = {
     state: () => ipcRenderer.invoke(IPC.youtubeState),
     toggleFavorite: (video) => ipcRenderer.invoke(IPC.youtubeToggleFavorite, video),
     addHistory: (video) => ipcRenderer.invoke(IPC.youtubeHistoryAdd, video)
+  },
+  streams: {
+    state: () => ipcRenderer.invoke(IPC.streamsState),
+    add: (url, name) => ipcRenderer.invoke(IPC.streamsAdd, url, name),
+    remove: (id) => ipcRenderer.invoke(IPC.streamsRemove, id),
+    rename: (id, name) => ipcRenderer.invoke(IPC.streamsRename, id, name),
+    markPlayed: (id) => ipcRenderer.invoke(IPC.streamsMarkPlayed, id),
+    openExternal: (url) => ipcRenderer.invoke(IPC.streamsOpenExternal, url)
   }
 }
 

@@ -3,11 +3,13 @@ import { ModalHost } from './components/ModalHost'
 import { PlaybackBar } from './components/PlaybackBar'
 import { QueuePanel } from './components/QueuePanel'
 import { Sidebar } from './components/Sidebar'
+import { StreamStage } from './components/StreamStage'
 import { TitleBar } from './components/TitleBar'
 import { Toasts } from './components/Toasts'
 import { YouTubeStage } from './components/YouTubeStage'
 import { DataProvider, useData } from './state/data'
 import { PlayerProvider, usePlayerActions } from './state/player'
+import { StreamsProvider, useStreams } from './state/streams'
 import { UiProvider, useUi } from './state/ui'
 import { YouTubeProvider, useYouTube } from './state/youtube'
 import { AlbumView } from './views/AlbumView'
@@ -31,7 +33,9 @@ export default function App(): ReactElement {
       <DataProvider>
         <PlayerProvider>
           <YouTubeProvider>
-            <Shell />
+            <StreamsProvider>
+              <Shell />
+            </StreamsProvider>
           </YouTubeProvider>
         </PlayerProvider>
       </DataProvider>
@@ -43,9 +47,13 @@ function Shell(): ReactElement {
   const data = useData()
   const ui = useUi()
   const youtube = useYouTube()
-  // The player is one element that changes size and position, never identity:
-  // on the Video screen it is the stage, elsewhere it docks to the corner.
-  const staged = ui.route.name === 'video' && youtube.current !== null
+  const streams = useStreams()
+  // The players are single elements that change size and position, never
+  // identity: on their own screen they are the stage, elsewhere they dock to the
+  // corner. The content column stacks when either one is staged.
+  const staged =
+    (ui.route.name === 'video' && youtube.current !== null) ||
+    (ui.route.name === 'streams' && streams.current !== null)
 
   useKeyboardShortcuts()
 
@@ -84,6 +92,7 @@ function Shell(): ReactElement {
         <Sidebar />
         <div className={`content ${staged ? 'has-stage' : ''}`}>
           <YouTubeStage />
+          <StreamStage />
           <ViewRouter />
         </div>
         {ui.queueOpen ? <QueuePanel /> : null}

@@ -1,6 +1,6 @@
 # Testing, formats and manual verification
 
-Last run: 27 October 2026, Windows 11 (10.0.26200), Node 24.21.0, Electron 45.1.0 (Chromium 156.0.8078.49).
+Last run: 28 October 2026, Windows 11 (10.0.26200), Node 24.21.0, Electron 45.1.0 (Chromium 156.0.8078.49).
 
 ## Commands
 
@@ -11,17 +11,19 @@ npm run test:e2e     # npm run build, then vitest with vitest.e2e.config.ts
 npm run bench        # cold start and 300-track import measurement
 node scripts/check-youtube.mjs        # live YouTube search → embedded playback check
 node scripts/check-youtube-dock.mjs   # live: playback survives leaving the Video screen, search finds videos
+node scripts/check-streams.mjs        # live streams: loopback server, M3U import, HLS playback, MKV fallback
 ```
 
 ## Automated results
 
 ```
-Unit + integration:  10 files, 132 tests, all passing (~42 s)
-End-to-end:          1 file, 9 tests, all passing (~44 s)
+Unit + integration:  11 files, 157 tests, all passing (~32 s)
+End-to-end:          1 file, 9 tests, all passing (~37 s)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
 Live YouTube check:  search → select → player reaches "playing" (no API key configured)
 Live dock check:     plays on the Video stage, keeps playing docked on Music/Search, pauses when minimised
+Live stream check:   14/14 checks (local server, real HLS playback, MKV hand-off)
 ```
 
 Coverage by area:
@@ -33,6 +35,7 @@ Coverage by area:
 | Local search | `tests/core/search.test.ts` | case/diacritic normalisation, relevance ordering, limits, album grouping |
 | Discovery helpers | `tests/core/discovery.test.ts` | query normalisation/bounding, dedupe by source+id, kind filtering, source metadata |
 | Lyrics parsing | `tests/core/lyrics.test.ts` | plain and LRC text, metadata tags, multiple timestamps per line, hundredths vs milliseconds, ordering, active-line lookup |
+| Network streams | `tests/core/streams.test.ts` | http(s)-only URL normalisation (magnet/file/javascript rejected), name derivation, M3U parse with `group-title`/`tvg-logo`/`#EXTGRP`, PLS parse, HLS detection instead of segment expansion, container classification (HLS / progressive / unsupported with a reason), HLS rewriting of segments, master variants, `EXT-X-KEY`, `EXT-X-MAP`, `EXT-X-PART`, stored-entry sanitising and id stability |
 | YouTube search parsing | `tests/core/youtube.test.ts` | id/title/channel/duration mapping from a real-shaped payload, `simpleText` and run titles, `compactVideoRenderer`, hour-long durations, malformed/id-less entries skipped, duplicates removed, playlist/channel renderers ignored, HTML entity decoding, `2:26`/`LIVE` length parsing |
 | YouTube queue | `tests/core/youtubeQueue.test.ts` | play/replace, per-video dedupe, play-all from an index, next/previous with back-stack bounding, enqueue vs play-next, remove/clear/stop, advance only when something is queued |
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
@@ -49,6 +52,35 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 - YouTube search and playback are checked by `scripts/check-youtube.mjs` and `scripts/check-youtube-dock.mjs`, not by the e2e suite, because they need live network and a third-party player. They fail loudly (non-zero exit) if search returns nothing, the player never reaches `playing`, the dock never appears, or the state does not survive the view change. The dock script also minimizes the window and asserts the player ends up `paused`; it shields the window from the real mouse so a person using the machine cannot skew the run.
 - One full e2e run out of three on 28 Oct 2026 failed three assertions (`Streams` text, accent token, and one earlier check) after running roughly twice as long as usual; two consecutive re-runs passed 9/9 at the normal duration. Treated as environment contention, not a regression, but it is recorded here rather than hidden.
 - The equalizer test measures samples at the node that feeds the speakers. It was added after a real defect: Web Audio outputs silence for cross-origin media, so an uncorsed `bunny-media://` scheme muted every track whenever any processing (EQ, bass or boost) was enabled while the clock kept advancing.
+- Network streams are covered by `scripts/check-streams.mjs`, not the e2e suite: the check needs a local HTTP server and a public HLS stream. It exits non-zero on any missed check and prints `SKIP` for the public HLS check when the network is unavailable, so an offline run cannot be mistaken for a pass.
+
+## Network stream verification (28 October 2026)
+
+`node scripts/check-streams.mjs` (after `npm run build`) starts a loopback HTTP server — a generated 4 s WAV with byte-range support, an M3U channel list, an HLS master + media playlist, and a file served as `video/x-matroska` — then drives the built app with Playwright.
+
+| Check | Result |
+| --- | --- |
+| M3U channel list expands into entries | pass |
+| playlist titles become entry names | pass |
+| `group-title` groups the imported channels | pass |
+| media is addressed through `bunny-stream://proxy/…` | pass |
+| a channel actually plays (`currentTime` > 0.5 s, `readyState` ≥ 2) | pass |
+| playback survives leaving the Streams screen (docked, clock keeps advancing) | pass |
+| Stop removes the dock | pass |
+| MKV is flagged as needing an external player | pass |
+| the unsupported state explains why and offers VLC | pass |
+| HLS master playlist is rewritten through the proxy | pass |
+| HLS media playlist is fetched through the proxy | pass |
+| HLS segment and key URIs are proxied | pass |
+| a real public HLS stream plays through hls.js (`test-streams.mux.dev`) | pass |
+| no unexpected renderer errors | pass |
+
+Known gaps in this coverage:
+
+- **VLC launch itself is not automated** — a passing run would open a real player window on the machine mid-test. The button, the http(s)-only validation and the fallback to the system handler are implemented and were reviewed by eye, but not asserted.
+- **Encrypted HLS was not played.** The `EXT-X-KEY` URI is rewritten and unit-tested; no AES-128 stream was fetched.
+- **Alternative renditions** (`EXT-X-MEDIA` audio/subtitle groups) go through the same rewriting rule but were not exercised against a real stream.
+- **Servers that demand a Referer or a browser User-Agent are refused.** That is deliberate; the app sends an honest User-Agent and reports the failure instead of impersonating a browser.
 
 ## Supported audio formats (tested)
 

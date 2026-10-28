@@ -1595,3 +1595,43 @@
 .archive-banner.is-info > svg {
   color: var(--accent);
 }
+
+/* Updates panel (Settings) */
+
+.update-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--panel-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.update-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 180ms linear;
+}
+
+.update-notes {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 150px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-sunken);
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.update-message {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-sunken);
+}

@@ -14,7 +14,10 @@ export default defineConfig({
       // Runtime dependencies (music-metadata is ESM-only) are bundled so the main
       // bundle and the scanner worker are self-contained CommonJS files.
       rollupOptions: {
-        external: ['electron'],
+        // electron-updater stays a real node_modules dependency: it reads
+        // app-update.yml relative to its own packaged location and pulls in
+        // optional helpers that must not be inlined into the bundle.
+        external: ['electron', 'electron-updater'],
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           scannerWorker: resolve(__dirname, 'src/main/library/scanner.worker.ts')

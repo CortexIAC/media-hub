@@ -15,6 +15,7 @@ import { ArchiveStore } from './storage/archiveStore'
 import { seedSources } from '@core/streamSeeds'
 import { dataPaths, type DataPaths } from './storage/paths'
 import { startRendererServer, type RendererServer } from './rendererServer'
+import { registerUpdaterIpc, UpdateService } from './updater'
 
 app.setName('Bunny Media Hub')
 registerMediaScheme()
@@ -36,6 +37,7 @@ let youtube: YouTubeStore
 let streams: StreamStore
 let archive: ArchiveStore
 let scanner: ScannerService
+let updates: UpdateService
 let scheduledScan: NodeJS.Timeout | null = null
 let quitting = false
 let currentProgress: ScanProgress | null = null
@@ -173,6 +175,27 @@ async function bootstrap(): Promise<void> {
   })
   registerIpc(context)
 
+  updates = new UpdateService({
+    getWindow: () => mainWindow,
+    // The installer replaces the app directory while this process exits, so
+    // every store has to be on disk before handing over.
+    prepareToInstall: async () => {
+      quitting = true
+      if (scheduledScan) clearTimeout(scheduledScan)
+      scanner.dispose()
+      await Promise.allSettled([
+        library.flush(),
+        playlists.flush(),
+        settings.flush(),
+        session.flush(),
+        youtube.flush(),
+        streams.flush(),
+        archive.flush()
+      ])
+    }
+  })
+  registerUpdaterIpc(updates)
+
   // Production loads the built renderer over loopback HTTP so it has an origin
   // and Referer for the official YouTube embed; development uses Vite.
   if (!process.env.ELECTRON_RENDERER_URL) {
@@ -181,6 +204,8 @@ async function bootstrap(): Promise<void> {
 
   applySecurityPolicy()
   createWindow()
+  // A quiet check shortly after launch; the result only surfaces in Settings.
+  updates.scheduleStartupCheck()
 
   if (!process.env.ELECTRON_RENDERER_URL) Menu.setApplicationMenu(null)
 

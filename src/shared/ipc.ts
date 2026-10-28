@@ -78,7 +78,13 @@ export const IPC = {
   archiveRemove: 'archive:remove',
   archiveMarkPlayed: 'archive:mark-played',
   archiveAttachSubtitle: 'archive:attach-subtitle',
-  archiveRemoveSubtitle: 'archive:remove-subtitle'
+  archiveRemoveSubtitle: 'archive:remove-subtitle',
+
+  updateStatus: 'update:status',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateInstall: 'update:install',
+  updateChanged: 'update:changed'
 } as const
 
 export interface ImportResult {
@@ -107,6 +113,43 @@ export interface AppInfo {
   platform: string
   dataDir: string
   artworkDir: string
+  /** True for an installed/built app; updates are inert when running from source. */
+  packaged: boolean
+}
+
+export interface UpdateReleaseNote {
+  version: string
+  note: string | null
+}
+
+export type UpdateNotes = string | UpdateReleaseNote[] | null
+
+export type UpdatePhase =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'up-to-date'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+export interface UpdateStatus {
+  phase: UpdatePhase
+  currentVersion: string
+  /** Version offered by the feed, when there is one. */
+  version: string | null
+  releaseName: string | null
+  releaseNotes: UpdateNotes
+  releaseDate: string | null
+  percent: number
+  bytesPerSecond: number
+  transferred: number
+  total: number
+  message: string | null
+  checkedAt: number | null
+  feed: string
+  packaged: boolean
 }
 
 export interface PlaylistState {
@@ -268,6 +311,13 @@ export interface BunnyApi {
     resolveTrack(trackId: string): Promise<ResolvedTrackSource | null>
     trackUrl(trackId: string): string
     artworkUrl(artworkId: string): string
+  }
+  updates: {
+    status(): Promise<UpdateStatus>
+    check(): Promise<UpdateStatus>
+    download(): Promise<UpdateStatus>
+    install(): Promise<void>
+    onChanged(callback: (status: UpdateStatus) => void): () => void
   }
   app: {
     info(): Promise<AppInfo>

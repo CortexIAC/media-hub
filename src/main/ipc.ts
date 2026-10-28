@@ -318,7 +318,8 @@ export function registerIpc(context: IpcContext): void {
     node: process.versions.node,
     platform: process.platform,
     dataDir: paths.root,
-    artworkDir: paths.artworkDir
+    artworkDir: paths.artworkDir,
+    packaged: app.isPackaged
   }))
 
   ipcMain.handle(IPC.appOpenDataDir, async () => {

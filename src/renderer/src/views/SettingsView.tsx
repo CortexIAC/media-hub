@@ -15,9 +15,10 @@ import {
 } from '@core/models'
 import { ACCENT_PRESETS } from '../theme/theme'
 import { useData } from '../state/data'
-import { useAppInfo } from '../state/meta'
+import { useAppInfo, useUpdates } from '../state/meta'
 import { usePlayerActions } from '../state/player'
 import { ImportIcon, RefreshIcon } from '../components/Icons'
+import type { UpdateStatus } from '@shared/ipc'
 
 /** Formats an end-to-end playback test has actually exercised in this build. */
 const VERIFIED_AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac'])
@@ -26,6 +27,7 @@ export function SettingsView(): ReactElement {
   const data = useData()
   const player = usePlayerActions()
   const info = useAppInfo()
+  const updates = useUpdates()
   const [volume, setVolume] = useState(data.settings.volume)
   const [apiKey, setApiKey] = useState(data.settings.youtubeApiKey)
 
@@ -372,6 +374,71 @@ export function SettingsView(): ReactElement {
         </section>
 
         <section className="settings-card">
+          <h2>Updates</h2>
+          <p className="faint" style={{ fontSize: 11.5, margin: 0, lineHeight: 1.6 }}>
+            Installed builds read releases from{' '}
+            <span className="mono">{updates.status?.feed ?? 'CortexIAC/media-hub'}</span> on GitHub. Nothing is downloaded until
+            you ask for it, and installing restarts the app.
+          </p>
+          <div className="settings-row">
+            <span className="settings-label">Installed version</span>
+            <span className="settings-value mono">{updates.status?.currentVersion ?? info?.version ?? '…'}</span>
+          </div>
+          <div className="settings-row">
+            <span className="settings-label">Update status</span>
+            <span className="settings-value" style={{ textAlign: 'right', maxWidth: 260 }}>
+              {describeUpdate(updates.status)}
+            </span>
+          </div>
+
+          {updates.status?.phase === 'downloading' ? (
+            <div className="update-progress" role="progressbar" aria-valuenow={Math.round(updates.status.percent)} aria-valuemin={0} aria-valuemax={100}>
+              <span style={{ width: `${updates.status.percent}%` }} />
+            </div>
+          ) : null}
+
+          {updates.status && (updates.status.phase === 'available' || updates.status.phase === 'downloaded') && updates.status.releaseNotes ? (
+            <pre className="update-notes">{notesText(updates.status.releaseNotes)}</pre>
+          ) : null}
+
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {updates.status?.phase === 'available' ? (
+              <button type="button" className="btn btn-sm btn-primary" onClick={updates.download}>
+                Download {updates.status.version}
+              </button>
+            ) : null}
+            {updates.status?.phase === 'downloaded' ? (
+              <button type="button" className="btn btn-sm btn-primary" onClick={updates.install}>
+                Restart and install
+              </button>
+            ) : null}
+            {updates.status?.phase !== 'available' && updates.status?.phase !== 'downloaded' ? (
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={updates.check}
+                disabled={updates.busy || updates.status?.packaged === false}
+              >
+                {updates.busy ? 'Working…' : 'Check for updates'}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => void window.bunny.app.openExternal('https://github.com/CortexIAC/media-hub/releases')}
+            >
+              All releases
+            </button>
+          </div>
+
+          {updates.status?.message ? (
+            <p className="faint update-message" style={{ fontSize: 11.5, margin: 0, lineHeight: 1.6 }}>
+              {updates.status.message}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="settings-card">
           <h2>About</h2>
           <table className="data-table">
             <tbody>
@@ -431,6 +498,46 @@ export function SettingsView(): ReactElement {
       </div>
     </div>
   )
+}
+
+function notesText(notes: NonNullable<UpdateStatus['releaseNotes']>): string {
+  return Array.isArray(notes) ? notes.map((entry) => entry.note ?? '').join('\n\n') : notes
+}
+
+function describeUpdate(status: UpdateStatus | null): string {
+  if (!status) return '…'
+  switch (status.phase) {
+    case 'disabled':
+      return 'Unavailable in this build'
+    case 'idle':
+      return 'Not checked yet'
+    case 'checking':
+      return 'Checking GitHub…'
+    case 'up-to-date':
+      return `Up to date${status.checkedAt ? ` · checked ${timeAgo(status.checkedAt)}` : ''}`
+    case 'available':
+      return `Version ${status.version} available`
+    case 'downloading':
+      return `Downloading ${status.version} · ${Math.round(status.percent)}% · ${formatBytes(status.bytesPerSecond)}/s`
+    case 'downloaded':
+      return `${status.version} ready to install`
+    case 'error':
+      return 'Check failed'
+  }
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0 MB'
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function timeAgo(timestamp: number): string {
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  return `${Math.round(minutes / 60)} h ago`
 }
 
 function Shortcut({ keys, action }: { keys: string; action: string }): ReactElement {

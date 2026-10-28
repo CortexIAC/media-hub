@@ -42,6 +42,13 @@ const api: BunnyApi = {
     trackUrl: (trackId) => `bunny-media://track/${encodeURIComponent(trackId)}`,
     artworkUrl: (artworkId) => `bunny-media://artwork/${encodeURIComponent(artworkId)}`
   },
+  updates: {
+    status: () => ipcRenderer.invoke(IPC.updateStatus),
+    check: () => ipcRenderer.invoke(IPC.updateCheck),
+    download: () => ipcRenderer.invoke(IPC.updateDownload),
+    install: () => ipcRenderer.invoke(IPC.updateInstall),
+    onChanged: (callback) => subscribe(IPC.updateChanged, callback)
+  },
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     openDataDir: () => ipcRenderer.invoke(IPC.appOpenDataDir),

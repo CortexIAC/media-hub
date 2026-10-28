@@ -1,0 +1,48 @@
+# electron-builder configuration for the Windows build and the update feed.
+#
+# `publish` is what makes electron-updater work: electron-builder writes
+# app-update.yml into resources/ from these values, and the packaged app reads
+# latest.yml from the matching GitHub release. Keep owner/repo in sync with the
+# repository that actually hosts the releases.
+appId: com.bunny.mediahub
+productName: Bunny Media Hub
+copyright: Copyright © 2026 CortexIAC
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the built output is packaged; source, tests and screenshots stay out.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+asar: true
+compression: normal
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: BunnyMediaHub-Setup-${version}.${ext}
+
+nsis:
+  # Per-user install: no admin prompt, installs under %LOCALAPPDATA%\Programs,
+  # which is also the only layout where NSIS self-updates work cleanly.
+  oneClick: true
+  perMachine: false
+  allowElevation: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Bunny Media Hub
+  artifactName: BunnyMediaHub-Setup-${version}.${ext}
+
+publish:
+  provider: github
+  owner: CortexIAC
+  repo: media-hub
+  releaseType: release

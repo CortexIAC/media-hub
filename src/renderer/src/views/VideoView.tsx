@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import { formatYouTubeTime, parseYouTubeTarget, uniqueVideos, type YouTubeVideo } from '@core/youtube'
-import type { YouTubeLibraryView, YouTubeSearchResult } from '@shared/ipc'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { formatYouTubeTime, parseYouTubeTarget, type YouTubeVideo } from '@core/youtube'
+import type { YouTubeSearchResult } from '@shared/ipc'
 import { EmptyState } from '../components/EmptyState'
 import {
   ExternalIcon,
   HeartIcon,
   MusicIcon,
   PlayIcon,
-  PlusIcon,
   QueueIcon,
   SearchIcon,
   SkipBackIcon,
@@ -15,90 +14,42 @@ import {
   TrashIcon,
   VideoIcon
 } from '../components/Icons'
-import { YouTubePlayer } from '../components/YouTubePlayer'
-import type { YouTubePlaybackState } from '../playback/youtubePlayer'
+import { YouTubeCard } from '../components/YouTubeCard'
 import { useData } from '../state/data'
 import { useUi } from '../state/ui'
+import { useYouTube } from '../state/youtube'
 
 type Tab = 'search' | 'favorites' | 'history'
 
 /**
- * YouTube discovery and playback. Search uses the Data API when a key is set;
- * any single video link can be played without a key because playback happens in
- * YouTube's own embedded player.
+ * YouTube discovery and queue management.
+ *
+ * The player element itself lives in the shell (`YouTubeStage`), so it keeps
+ * playing when this view is left. This screen owns the search box, the saved and
+ * recent lists, and the queue.
  */
 export function VideoView(): ReactElement {
   const data = useData()
   const ui = useUi()
+  const youtube = useYouTube()
   const hasKey = data.settings.youtubeApiKey.trim().length > 0
 
   const [tab, setTab] = useState<Tab>('search')
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<YouTubeSearchResult | null>(null)
   const [searching, setSearching] = useState(false)
-  const [library, setLibrary] = useState<YouTubeLibraryView>({ favorites: [], history: [] })
-  const [current, setCurrent] = useState<YouTubeVideo | null>(null)
-  const [queue, setQueue] = useState<YouTubeVideo[]>([])
-  const [played, setPlayed] = useState<YouTubeVideo[]>([])
-  const [playerState, setPlayerState] = useState<YouTubePlaybackState>('unstarted')
   const [link, setLink] = useState('')
   const [linkError, setLinkError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
 
+  const current = youtube.current
+  const viewRef = useRef<HTMLDivElement>(null)
+
+  // The player sits above this view, so a new video should be seen from the top
+  // of the list rather than wherever the previous one left the scroll position.
   useEffect(() => {
-    let cancelled = false
-    void window.bunny.youtube
-      .state()
-      .then((state) => {
-        if (!cancelled) setLibrary(state)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const play = useCallback((video: YouTubeVideo) => {
-    setCurrent((previous) => {
-      if (previous && previous.id !== video.id) setPlayed((stack) => [previous, ...stack].slice(0, 50))
-      return video
-    })
-    setQueue((items) => items.filter((item) => item.id !== video.id))
-    void window.bunny.youtube.addHistory(video).then(setLibrary).catch(() => undefined)
-  }, [])
-
-  const next = useCallback(() => {
-    setQueue((items) => {
-      const [head, ...rest] = items
-      if (!head) return items
-      setCurrent((previous) => {
-        if (previous) setPlayed((stack) => [previous, ...stack].slice(0, 50))
-        return head
-      })
-      void window.bunny.youtube.addHistory(head).then(setLibrary).catch(() => undefined)
-      return rest
-    })
-  }, [])
-
-  const previous = useCallback(() => {
-    setPlayed((stack) => {
-      const [head, ...rest] = stack
-      if (!head) return stack
-      setCurrent((old) => {
-        if (old) setQueue((items) => [old, ...items])
-        return head
-      })
-      return rest
-    })
-  }, [])
-
-  const addToQueue = useCallback((video: YouTubeVideo) => {
-    setQueue((items) => uniqueVideos([...items, video]))
-  }, [])
-
-  const playNext = useCallback((video: YouTubeVideo) => {
-    setQueue((items) => uniqueVideos([video, ...items.filter((item) => item.id !== video.id)]))
-  }, [])
+    if (current) viewRef.current?.scrollTo({ top: 0 })
+  }, [current?.id])
 
   const runSearch = async (): Promise<void> => {
     const text = query.trim()
@@ -130,7 +81,7 @@ export function VideoView(): ReactElement {
     try {
       const resolved = await window.bunny.youtube.resolve(link)
       if (resolved.video) {
-        play(resolved.video)
+        youtube.play(resolved.video)
         setLink('')
       } else {
         setLinkError(resolved.error ?? 'That video could not be resolved.')
@@ -140,68 +91,67 @@ export function VideoView(): ReactElement {
     }
   }
 
-  const toggleFavorite = (video: YouTubeVideo): void => {
-    void window.bunny.youtube.toggleFavorite(video).then(setLibrary).catch(() => undefined)
-  }
+  const visible: YouTubeVideo[] =
+    tab === 'favorites' ? youtube.library.favorites : tab === 'history' ? youtube.library.history : search?.videos ?? []
 
-  const favoriteIds = useMemo(() => new Set(library.favorites.map((video) => video.id)), [library.favorites])
-  const visible: YouTubeVideo[] = tab === 'favorites' ? library.favorites : tab === 'history' ? library.history : search?.videos ?? []
+  const isCurrent = (video: YouTubeVideo): boolean => current?.id === video.id
 
   return (
-    <div className="view">
-      <div className="view-header">
-        <div className="view-header-text">
-          <span className="view-eyebrow">Video · YouTube</span>
-          <h1>Video</h1>
-          <p className="view-subtitle">
-            Search YouTube and watch in the official embedded player. Playback stays visible here — YouTube’s terms do not allow
-            hidden or background playback, so leaving this screen stops the video.
-          </p>
+    <div className="view" ref={viewRef}>
+      {current ? null : (
+        <div className="view-header">
+          <div className="view-header-text">
+            <span className="view-eyebrow">Video · YouTube</span>
+            <h1>Video</h1>
+            <p className="view-subtitle">
+              Playback runs in YouTube’s own player. It keeps playing while you browse the rest of the app — the player stays
+              visible in the corner, because YouTube’s terms do not allow hidden or background playback, and it pauses when the
+              window is minimised.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {current ? (
-        <section className="yt-stage">
-          <YouTubePlayer
-            videoId={current.id}
-            title={current.title}
-            onStateChange={setPlayerState}
-            onEnded={() => {
-              if (queue.length > 0) next()
-            }}
-          />
-          <div className="yt-now">
-            <div style={{ minWidth: 0 }}>
-              <div className="yt-now-title">{current.title}</div>
-              <div className="yt-now-sub">
-                {[current.channel, current.durationMs ? formatYouTubeTime(current.durationMs) : null, playerState].filter(Boolean).join(' · ')}
-              </div>
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${favoriteIds.has(current.id) ? 'btn-primary' : ''}`}
-                onClick={() => toggleFavorite(current)}
-                aria-pressed={favoriteIds.has(current.id)}
-              >
-                <HeartIcon size={14} filled={favoriteIds.has(current.id)} /> {favoriteIds.has(current.id) ? 'Saved' : 'Save'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                onClick={() => void window.bunny.app.openExternal(current.url)}
-              >
-                <ExternalIcon size={14} /> YouTube
-              </button>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={previous} disabled={played.length === 0}>
-                <SkipBackIcon size={14} /> Previous
-              </button>
-              <button type="button" className="btn btn-sm" onClick={next} disabled={queue.length === 0}>
-                Next <SkipForwardIcon size={14} />
-              </button>
+        <div className="yt-now">
+          <div style={{ minWidth: 0 }}>
+            <span className="view-eyebrow yt-now-eyebrow">Video · YouTube</span>
+            <div className="yt-now-title">{current.title}</div>
+            <div className="yt-now-sub">
+              {[current.channel, current.durationMs ? formatYouTubeTime(current.durationMs) : null, youtube.playerState]
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           </div>
-        </section>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${youtube.favoriteIds.has(current.id) ? 'btn-primary' : ''}`}
+              onClick={() => youtube.toggleFavorite(current)}
+              aria-pressed={youtube.favoriteIds.has(current.id)}
+            >
+              <HeartIcon size={14} filled={youtube.favoriteIds.has(current.id)} />{' '}
+              {youtube.favoriteIds.has(current.id) ? 'Saved' : 'Save'}
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void window.bunny.app.openExternal(current.url)}>
+              <ExternalIcon size={14} /> YouTube
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={youtube.previous}
+              disabled={youtube.played.length === 0}
+            >
+              <SkipBackIcon size={14} /> Previous
+            </button>
+            <button type="button" className="btn btn-sm" onClick={youtube.next} disabled={youtube.queue.length === 0}>
+              Next <SkipForwardIcon size={14} />
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={youtube.stop}>
+              Stop
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="card yt-intro">
           <span className="empty-icon" style={{ flex: 'none' }}>
@@ -211,7 +161,8 @@ export function VideoView(): ReactElement {
             <div className="card-title">Search, or paste any YouTube link</div>
             <p className="card-body">
               Playback runs in YouTube’s own player, so it counts as a real view and keeps ads and attribution intact. Searching
-              needs no key; a pasted link plays straight away.
+              needs no key; a pasted link plays straight away. Picking a result starts playback and leaves the player at the top of
+              this screen.
             </p>
           </div>
         </div>
@@ -236,6 +187,11 @@ export function VideoView(): ReactElement {
         <button type="button" className="btn btn-primary" onClick={() => void runSearch()} disabled={searching || query.trim().length < 2}>
           {searching ? 'Searching…' : 'Search'}
         </button>
+        {search && search.videos.length > 1 ? (
+          <button type="button" className="btn" onClick={() => youtube.playList(search.videos, 0)}>
+            <PlayIcon size={13} /> Play all
+          </button>
+        ) : null}
       </div>
 
       <div className="yt-link-row">
@@ -256,7 +212,11 @@ export function VideoView(): ReactElement {
           YouTube key settings
         </button>
       </div>
-      {linkError ? <p className="faint" style={{ fontSize: 12, marginTop: -6 }}>{linkError}</p> : null}
+      {linkError ? (
+        <p className="faint" style={{ fontSize: 12, marginTop: -6 }}>
+          {linkError}
+        </p>
+      ) : null}
 
       {search?.warning ? (
         <p className="faint" style={{ fontSize: 12, marginTop: -6 }}>
@@ -308,7 +268,11 @@ export function VideoView(): ReactElement {
             className={`btn btn-sm ${tab === entry ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setTab(entry)}
           >
-            {entry === 'search' ? 'Results' : entry === 'favorites' ? `Saved (${library.favorites.length})` : `Recent (${library.history.length})`}
+            {entry === 'search'
+              ? 'Results'
+              : entry === 'favorites'
+                ? `Saved (${youtube.library.favorites.length})`
+                : `Recent (${youtube.library.history.length})`}
           </button>
         ))}
       </div>
@@ -328,57 +292,32 @@ export function VideoView(): ReactElement {
       ) : (
         <div className="yt-grid">
           {visible.map((video) => (
-            <article className="yt-card" key={video.id}>
-              <button type="button" className="yt-thumb" aria-label={`Play YouTube ${video.title}`} onClick={() => play(video)}>
-                <img src={video.thumbnailUrl} alt="" loading="lazy" />
-                <span className="yt-thumb-play">
-                  <PlayIcon size={18} />
-                </span>
-                {video.durationMs ? <span className="yt-thumb-time">{formatYouTubeTime(video.durationMs)}</span> : null}
-              </button>
-              <div className="yt-card-body">
-                <div className="yt-card-title" title={video.title}>
-                  {video.title}
-                </div>
-                <div className="yt-card-sub">{video.channel ?? 'YouTube'}</div>
-                <div className="yt-card-actions">
-                  <button type="button" className="btn btn-sm" onClick={() => play(video)}>
-                    <PlayIcon size={12} /> Play
-                  </button>
-                  <button type="button" className="btn btn-sm btn-ghost" aria-label={`Play next: ${video.title}`} onClick={() => playNext(video)}>
-                    <SkipForwardIcon size={12} /> Next
-                  </button>
-                  <button type="button" className="btn btn-sm btn-ghost" aria-label={`Add to queue: ${video.title}`} onClick={() => addToQueue(video)}>
-                    <PlusIcon size={12} /> Queue
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm btn-ghost ${favoriteIds.has(video.id) ? 'is-active' : ''}`}
-                    aria-label={favoriteIds.has(video.id) ? `Remove ${video.title} from saved videos` : `Save ${video.title}`}
-                    aria-pressed={favoriteIds.has(video.id)}
-                    onClick={() => toggleFavorite(video)}
-                  >
-                    <HeartIcon size={12} filled={favoriteIds.has(video.id)} />
-                  </button>
-                </div>
-              </div>
-            </article>
+            <YouTubeCard
+              key={video.id}
+              video={video}
+              favorite={youtube.favoriteIds.has(video.id)}
+              playing={isCurrent(video) && youtube.playerState === 'playing'}
+              onPlay={() => youtube.play(video)}
+              onPlayNext={() => youtube.playNextUp(video)}
+              onEnqueue={() => youtube.enqueue(video)}
+              onToggleFavorite={() => youtube.toggleFavorite(video)}
+            />
           ))}
         </div>
       )}
 
-      {queue.length > 0 ? (
+      {youtube.queue.length > 0 ? (
         <section className="section">
           <div className="section-header">
             <h2>
-              <QueueIcon size={14} /> Up next · {queue.length}
+              <QueueIcon size={14} /> Up next · {youtube.queue.length}
             </h2>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setQueue([])}>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={youtube.clearQueue}>
               Clear queue
             </button>
           </div>
           <div className="discovery-list">
-            {queue.map((video, index) => (
+            {youtube.queue.map((video, index) => (
               <div className="discovery-row" key={video.id}>
                 <span className="discovery-glyph" aria-hidden="true">
                   {index + 1}
@@ -388,14 +327,14 @@ export function VideoView(): ReactElement {
                   <div className="discovery-meta">{video.channel ?? 'YouTube'}</div>
                 </div>
                 <div className="discovery-badges">
-                  <button type="button" className="btn btn-sm" onClick={() => play(video)}>
+                  <button type="button" className="btn btn-sm" onClick={() => youtube.play(video)}>
                     <PlayIcon size={12} /> Play
                   </button>
                   <button
                     type="button"
                     className="btn btn-sm btn-ghost"
                     aria-label={`Remove ${video.title} from queue`}
-                    onClick={() => setQueue((items) => items.filter((item) => item.id !== video.id))}
+                    onClick={() => youtube.removeFromQueue(video.id)}
                   >
                     <TrashIcon size={13} />
                   </button>

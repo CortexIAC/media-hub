@@ -54,7 +54,7 @@ export function TitleBar(): ReactElement {
             id="global-search"
             className="input"
             type="search"
-            placeholder="Search tracks, albums, artists"
+            placeholder="Search your library, YouTube and books"
             value={ui.searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
             onKeyDown={(event) => {

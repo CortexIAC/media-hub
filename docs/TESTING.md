@@ -9,17 +9,19 @@ npm run typecheck    # tsc -p tsconfig.node.json && tsc -p tsconfig.web.json
 npm test             # vitest run, unit + integration (no Electron)
 npm run test:e2e     # npm run build, then vitest with vitest.e2e.config.ts
 npm run bench        # cold start and 300-track import measurement
-node scripts/check-youtube.mjs   # live YouTube search → embedded playback check
+node scripts/check-youtube.mjs        # live YouTube search → embedded playback check
+node scripts/check-youtube-dock.mjs   # live: playback survives leaving the Video screen, search finds videos
 ```
 
 ## Automated results
 
 ```
-Unit + integration:  9 files, 115 tests, all passing (~32 s)
-End-to-end:          1 file, 9 tests, all passing (~38 s)
+Unit + integration:  10 files, 132 tests, all passing (~42 s)
+End-to-end:          1 file, 9 tests, all passing (~44 s)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
 Live YouTube check:  search → select → player reaches "playing" (no API key configured)
+Live dock check:     plays on the Video stage, keeps playing docked on Music/Search, pauses when minimised
 ```
 
 Coverage by area:
@@ -32,6 +34,7 @@ Coverage by area:
 | Discovery helpers | `tests/core/discovery.test.ts` | query normalisation/bounding, dedupe by source+id, kind filtering, source metadata |
 | Lyrics parsing | `tests/core/lyrics.test.ts` | plain and LRC text, metadata tags, multiple timestamps per line, hundredths vs milliseconds, ordering, active-line lookup |
 | YouTube search parsing | `tests/core/youtube.test.ts` | id/title/channel/duration mapping from a real-shaped payload, `simpleText` and run titles, `compactVideoRenderer`, hour-long durations, malformed/id-less entries skipped, duplicates removed, playlist/channel renderers ignored, HTML entity decoding, `2:26`/`LIVE` length parsing |
+| YouTube queue | `tests/core/youtubeQueue.test.ts` | play/replace, per-video dedupe, play-all from an index, next/previous with back-stack bounding, enqueue vs play-next, remove/clear/stop, advance only when something is queued |
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
@@ -43,7 +46,8 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 
 - The e2e playback assertion failed once in four consecutive full runs (a 20 s timeout waiting for the clock to move on the first test after a fresh build) and passed on re-run and in every other run. It is a timing flake in the harness, not a playback regression; the same file passed immediately after.
 - Catalogue search tests never assert live network results. Network failures are covered by unit-level error paths and by showing `errors[]` in the UI; live checks are manual (below).
-- YouTube search and playback are checked by `scripts/check-youtube.mjs`, not by the e2e suite, because they need live network and a third-party player. It fails loudly (non-zero exit) if search returns nothing or the player never reaches `playing`.
+- YouTube search and playback are checked by `scripts/check-youtube.mjs` and `scripts/check-youtube-dock.mjs`, not by the e2e suite, because they need live network and a third-party player. They fail loudly (non-zero exit) if search returns nothing, the player never reaches `playing`, the dock never appears, or the state does not survive the view change. The dock script also minimizes the window and asserts the player ends up `paused`; it shields the window from the real mouse so a person using the machine cannot skew the run.
+- One full e2e run out of three on 28 Oct 2026 failed three assertions (`Streams` text, accent token, and one earlier check) after running roughly twice as long as usual; two consecutive re-runs passed 9/9 at the normal duration. Treated as environment contention, not a regression, but it is recorded here rather than hidden.
 - The equalizer test measures samples at the node that feeds the speakers. It was added after a real defect: Web Audio outputs silence for cross-origin media, so an uncorsed `bunny-media://` scheme muted every track whenever any processing (EQ, bass or boost) was enabled while the clock kept advancing.
 
 ## Supported audio formats (tested)

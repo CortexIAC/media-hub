@@ -19,11 +19,11 @@ What a third-party desktop app can legitimately do with each source, based on th
 ## YouTube
 
 - **Search and metadata**: `search.list`, `videos.list`, `channels.list`, `playlists.list` and `playlistItems.list` are available through the Data API v3. Default quota is 100 `search.list` calls/day plus 10,000 units/day for other endpoints (midnight Pacific reset).
-- **Playback**: must use the official IFrame/embedded player, which must stay visible (minimum 200×200) and unobscured. Supplemental controls are allowed only where they do not conflict with YouTube's own UI, and ads must not be blocked or modified.
+- **Playback**: must use the official IFrame/embedded player, which must stay visible (minimum 200×200) and unobscured. Supplemental controls are allowed only where they do not conflict with YouTube's own UI, and ads must not be blocked or modified. This build keeps one player mounted: 768×432 as the Video stage, 366×206 when docked in the corner, and paused whenever the window is minimised.
 - **Prohibited**: background playback (playing content while the player is not in the view the user is looking at; the policy guide names continuing playback when the app is minimised or closed), separating or isolating audio, promoting audio separately, downloading or caching audiovisual content, and undocumented APIs or scraping.
 - **What this build does**: playback is the official embedded player, visible and unmodified on the Video screen, with playlist/controls left to YouTube; the app only calls documented IFrame API methods and stops the video when you leave the screen. No stream URL, audio track or download is ever produced.
 - **Search caveat**: the keyless path posts to YouTube's own `/youtubei/v1/search`, the request its web player makes. That endpoint is not part of the documented API and its Developer Policies discourage undocumented APIs, so it is treated as a removable convenience: a Data API key always takes priority, and the keyless path is isolated behind one function so it can be switched off without touching the rest of the app.
-- **Conclusion**: embedded-player playback plus genuine search is permitted; Spotify-style audio-only streaming of YouTube content is not, regardless of the user's Premium status, without prior written approval.
+- **Conclusion**: embedded-player playback plus genuine search is permitted; Spotify-style audio-only streaming of YouTube content is not, regardless of the user's Premium status, without prior written approval. "Keep playing while I use the rest of the app" is therefore implemented as a player that stays visible — docked in the corner at 366×206 — never as hidden audio, and minimizing the window pauses it.
 
 ## Spotify
 

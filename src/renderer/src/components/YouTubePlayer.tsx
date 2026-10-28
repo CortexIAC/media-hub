@@ -60,7 +60,10 @@ export function YouTubePlayer({ videoId, title, onStateChange, onEnded }: YouTub
             controls: 1,
             rel: 0,
             playsinline: 1,
-            modestbranding: 1
+            modestbranding: 1,
+            // Selecting a result is the user gesture; that click is what starts
+            // playback, so the player does not sit cued waiting for a second one.
+            autoplay: 1
           },
           events: {
             onReady: (event) => {
@@ -69,6 +72,11 @@ export function YouTubePlayer({ videoId, title, onStateChange, onEnded }: YouTub
               setDurationMs(event.target.getDuration() * 1000)
               setVolume(event.target.getVolume())
               publishState('cued')
+              try {
+                event.target.playVideo()
+              } catch {
+                // The player reports its own errors through onError.
+              }
             },
             onStateChange: (event) => {
               if (disposed) return
@@ -102,6 +110,31 @@ export function YouTubePlayer({ videoId, title, onStateChange, onEnded }: YouTub
     }
     // The player is created once; later video changes go through loadVideoById.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // YouTube's API terms forbid background playback: the player must stay
+  // visible for the content to keep playing. Minimising the window pauses it
+  // (the main process reports that; Chromium does not mark the page hidden for
+  // a minimised Electron window), and so does the page going hidden.
+  useEffect(() => {
+    const pause = (): void => {
+      try {
+        player.current?.pauseVideo()
+      } catch {
+        // The iframe may already be gone.
+      }
+    }
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') pause()
+    }
+    const offWindowVisibility = window.bunny.app.onWindowVisibility((visible) => {
+      if (!visible) pause()
+    })
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      offWindowVisibility()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   useEffect(() => {

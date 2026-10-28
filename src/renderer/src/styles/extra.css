@@ -389,6 +389,111 @@
 
 /* YouTube --------------------------------------------------------------- */
 
+/*
+ * The player is a single element the shell mounts once: laid out as the Video
+ * stage on that screen, docked to the corner everywhere else. Only its box
+ * changes, never its identity, so the iframe is never torn down mid-video.
+ */
+
+.content.has-stage {
+  flex-direction: column;
+}
+
+.yt-host.is-stage {
+  flex: none;
+  width: min(100%, calc(50vh * 16 / 9));
+  padding: 22px 34px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.yt-host.is-dock {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--playerbar-height) + 16px);
+  z-index: 40;
+  width: 384px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: rgba(12, 16, 14, 0.96);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.55);
+  animation: yt-dock-in 160ms ease-out;
+}
+
+@keyframes yt-dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yt-host.is-dock {
+    animation: none;
+  }
+}
+
+.yt-host.is-dock .yt-frame-wrap {
+  min-height: 200px;
+  border-radius: var(--radius-sm);
+}
+
+/* The embedded player keeps its own controls; the app's row would not fit. */
+.yt-host.is-dock .yt-controls {
+  display: none;
+}
+
+.yt-dock-bar,
+.yt-dock-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.yt-dock-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.yt-dock-eyebrow {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.yt-dock-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yt-dock-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.yt-dock-hint {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.yt-card.is-playing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft) inset;
+}
+
 .yt-stage {
   margin-bottom: 20px;
   padding: 14px;
@@ -481,6 +586,28 @@
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 18px;
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-field > svg {
+  position: absolute;
+  left: 14px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.search-field .input {
+  padding-left: 38px;
+}
+
+.yt-now-eyebrow {
+  display: block;
+  margin-bottom: 2px;
 }
 
 .yt-search-row,
@@ -618,5 +745,13 @@
   }
   .yt-frame-wrap {
     min-height: 200px;
+  }
+  .yt-host.is-stage {
+    width: 100%;
+    padding: 16px 16px 0;
+  }
+  .yt-host.is-dock {
+    width: calc(100% - 24px);
+    right: 12px;
   }
 }

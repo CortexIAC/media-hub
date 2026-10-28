@@ -5,9 +5,11 @@ import { QueuePanel } from './components/QueuePanel'
 import { Sidebar } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { Toasts } from './components/Toasts'
+import { YouTubeStage } from './components/YouTubeStage'
 import { DataProvider, useData } from './state/data'
 import { PlayerProvider, usePlayerActions } from './state/player'
 import { UiProvider, useUi } from './state/ui'
+import { YouTubeProvider, useYouTube } from './state/youtube'
 import { AlbumView } from './views/AlbumView'
 import { ArtistView } from './views/ArtistView'
 import { DevicesView } from './views/DevicesView'
@@ -28,7 +30,9 @@ export default function App(): ReactElement {
     <UiProvider>
       <DataProvider>
         <PlayerProvider>
-          <Shell />
+          <YouTubeProvider>
+            <Shell />
+          </YouTubeProvider>
         </PlayerProvider>
       </DataProvider>
     </UiProvider>
@@ -38,6 +42,10 @@ export default function App(): ReactElement {
 function Shell(): ReactElement {
   const data = useData()
   const ui = useUi()
+  const youtube = useYouTube()
+  // The player is one element that changes size and position, never identity:
+  // on the Video screen it is the stage, elsewhere it docks to the corner.
+  const staged = ui.route.name === 'video' && youtube.current !== null
 
   useKeyboardShortcuts()
 
@@ -74,7 +82,8 @@ function Shell(): ReactElement {
       <TitleBar />
       <div className="app-body">
         <Sidebar />
-        <div className="content">
+        <div className={`content ${staged ? 'has-stage' : ''}`}>
+          <YouTubeStage />
           <ViewRouter />
         </div>
         {ui.queueOpen ? <QueuePanel /> : null}

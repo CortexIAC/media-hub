@@ -49,7 +49,8 @@ const api: BunnyApi = {
     minimize: () => ipcRenderer.invoke(IPC.windowMinimize),
     toggleMaximize: () => ipcRenderer.invoke(IPC.windowToggleMaximize),
     close: () => ipcRenderer.invoke(IPC.windowClose),
-    isMaximized: () => ipcRenderer.invoke(IPC.windowIsMaximized)
+    isMaximized: () => ipcRenderer.invoke(IPC.windowIsMaximized),
+    onWindowVisibility: (callback) => subscribe(IPC.windowVisibility, callback)
   },
   providers: {
     list: () => ipcRenderer.invoke(IPC.providersList)

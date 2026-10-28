@@ -102,5 +102,6 @@ The working tree is committed at the end of the sprint; see `git log --oneline` 
 
 - **Equalizer**: implemented with Web Audio biquad filters, persisted, verified with real playback.
 - **"Mari Glock" not appearing**: the app previously searched only local files. Global search now also queries the online catalogues, and the Video screen searches YouTube without any key. Copyrighted commercial music still cannot be streamed as audio by any legal free catalogue; YouTube play happens in YouTube's own player.
+- **YouTube while browsing**: the player is now mounted once by the shell and docks to the corner on every other screen, so a video keeps playing while you browse (and global search returns playable YouTube results). It pauses when the window is minimised — that is the line YouTube's API terms draw, not a missing feature. True background playback is not available under those terms.
 - **Cinejoy**: no public API or developer programme found for cinejoy.pk, so nothing is integrated; adding it needs a partner agreement.
 - **Books**: the Virtual Library covers public-domain catalogues. *The Missing* (Margaret Peterson Haddix) is in copyright — Open Library links to legal borrowing, and a local library card via Libby/OverDrive is the free route.

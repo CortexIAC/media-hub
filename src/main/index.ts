@@ -185,6 +185,18 @@ function createWindow(): void {
   window.on('maximize', () => window.webContents.send('window:maximized', true))
   window.on('unmaximize', () => window.webContents.send('window:maximized', false))
 
+  // Chromium does not report an Electron window as hidden when it is minimised,
+  // so the renderer cannot rely on `visibilitychange` alone. The YouTube player
+  // stops when the window leaves the screen: its API terms forbid background
+  // playback, and the player has to stay visible for the content to keep going.
+  const reportVisibility = (visible: boolean): void => {
+    if (!window.isDestroyed()) window.webContents.send(IPC.windowVisibility, visible)
+  }
+  window.on('minimize', () => reportVisibility(false))
+  window.on('hide', () => reportVisibility(false))
+  window.on('restore', () => reportVisibility(true))
+  window.on('show', () => reportVisibility(true))
+
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalHttpUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }

@@ -50,6 +50,7 @@ export const IPC = {
   windowToggleMaximize: 'window:toggle-maximize',
   windowClose: 'window:close',
   windowIsMaximized: 'window:is-maximized',
+  windowVisibility: 'window:visibility',
   providersList: 'providers:list',
   discoverySearch: 'discovery:search',
   lyricsGet: 'lyrics:get',
@@ -169,6 +170,8 @@ export interface BunnyApi {
     toggleMaximize(): Promise<boolean>
     close(): Promise<void>
     isMaximized(): Promise<boolean>
+    /** Fires when the window is minimised/hidden or shown again. */
+    onWindowVisibility(callback: (visible: boolean) => void): () => void
   }
   providers: {
     list(): Promise<ProviderDescriptor[]>

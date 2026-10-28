@@ -29,7 +29,7 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Lyrics**: embedded tags, `.lrc`/`.txt` sidecar files, and an LRCLIB lookup as a fallback, with synced lines following the playhead in Now Playing.
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
 - **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive.
-- **YouTube**: search with no key at all, then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. A Data API key is optional and only changes the search path.
+- **YouTube**: search with no key at all — from the Video screen or the search field at the top — then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. The player docks to the corner while you browse other screens (a video keeps playing while you look through the library, and it stays visible on purpose: YouTube's terms forbid hidden playback). A Data API key is optional and only changes the search path.
 - **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
 
 ## What is planned, not built
@@ -43,11 +43,12 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 115 unit tests (vitest)
+npm test             # 132 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
-node scripts/check-youtube.mjs   # live YouTube search → real playback check (needs a build)
+node scripts/check-youtube.mjs        # live YouTube search → real playback check (needs a build)
+node scripts/check-youtube-dock.mjs   # live check that playback survives leaving the Video screen
 ```
 
 End-to-end tests drive the real Electron app with Playwright, import a generated fixture library, play MP3/WAV/FLAC audio, restart the app and verify persistence. Screenshots are written to `screenshots/`.
@@ -73,7 +74,7 @@ Settings → Library → **Open data folder** takes you there.
 ## Online catalogues and the law
 
 - Open Library, Project Gutenberg, LibriVox and the Internet Archive are queried through their public read APIs, with a descriptive User-Agent, bounded timeouts and no retries in a loop.
-- YouTube search needs no key: it uses the same public search request YouTube's own web player makes, and falls back to the documented Data API v3 when you add a key. Playback always happens in the official embedded player, visible on the Video screen, because YouTube's developer policies forbid extracting audio, hiding the player, or background playback. No stream URL is ever resolved.
+- YouTube search needs no key: it uses the same public search request YouTube's own web player makes, and falls back to the documented Data API v3 when you add a key. Playback always happens in the official embedded player, because YouTube's developer policies forbid extracting audio, hiding the player or background playback. On the Video screen that player is the stage; elsewhere it docks into the corner, still on screen and still at least 366×206 px. Minimising the window pauses it. No stream URL is ever resolved.
 - Lyrics come from your files first. When neither a tag nor a sidecar file exists, the app asks [LRCLIB](https://lrclib.net), a free open lyrics service; only the track title, artist, album and duration are sent.
 - Copyrighted books (for example Margaret Peterson Haddix's *The Missing* series) are **not** downloadable here. Open Library links to legal borrowing; your local library's Libby/OverDrive catalogue is the usual free route.
 

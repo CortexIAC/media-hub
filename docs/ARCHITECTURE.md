@@ -6,8 +6,9 @@ Sprint 1: Electron 45 (Chromium 156, Node 24) + React 19 + TypeScript, bundled b
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Renderer (React, sandboxed, no Node)                                 │
 │  views/ components/ theme/                                           │
-│  state/data.tsx  state/player.tsx  state/ui.tsx                      │
+│  state/data.tsx  state/player.tsx  state/youtube.tsx  state/ui.tsx   │
 │  playback/audioEngine.ts  ── HTMLAudioElement + Web Audio EQ chain   │
+│  components/YouTubeStage  ── one iframe, stage or dock              │
 └───────────────▲──────────────────────────────┬───────────────────────┘
                 │ contextBridge (window.bunny) │ bunny-media:// stream
 ┌───────────────┴──────────────────────────────▼───────────────────────┐
@@ -78,6 +79,16 @@ Four JSON stores (`JsonFile`) with atomic temp-file writes, corrupt-file quarant
 YouTube has two search paths in `providers/youtube.ts`: the documented Data API v3 when the user supplies a key, and otherwise the same public `/youtubei/v1/search` request YouTube's own web player sends (no key, no account). A failing key falls back to the keyless path instead of blanking the results. Search payloads are parsed by the pure `core/youtube.ts` parser, so the shaping logic is unit-tested without a network call.
 
 Playback never leaves YouTube's own player: `components/YouTubePlayer` embeds the IFrame API, and the app only calls documented player methods (`playVideo`, `pauseVideo`, `seekTo`, `setVolume`). No stream URL is requested or produced — that is a deliberate policy decision, documented in [PROVIDER-FEASIBILITY.md](PROVIDER-FEASIBILITY.md) and [YOUTUBE.md](YOUTUBE.md).
+
+### YouTube session and the docked player
+
+YouTube playback outlives any single view, so its state is not owned by a view:
+
+- `state/youtube.tsx` holds the current video, the queue and the back-stack, saved videos and history, and the player's reported state. `core/youtubeQueue.ts` performs the transitions as pure functions, so next/previous/play-all/enqueue/end have unit tests and no player is needed to test them.
+- `components/YouTubeStage.tsx` is the only mounted player. The shell renders it inside `.content`; on the Video route it is a flex item (`is-stage`, ~50vh tall) and everywhere else it is `position: fixed` in the bottom-right (`is-dock`, 384 px wide). Switching routes changes classes only, so the `<iframe>` and its playback are untouched.
+- The global search field and the Video screen both feed the same session, which is why a video started from search keeps playing while you browse the library.
+- The main process reports window visibility (`window:visibility`) on `minimize`/`hide`/`restore`/`show`, because a minimised Electron window still reports `document.visibilityState === 'visible'`. The player pauses when the window leaves the screen: YouTube's terms do not permit background playback.
+- Starting a video also calls `playVideo()` on `onReady` (with `autoplay: 1`), so the click that selects a result is the only click needed.
 
 ### Application shell
 

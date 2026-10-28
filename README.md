@@ -15,12 +15,27 @@ Three ways, depending on what you want:
 | Goal | Command |
 | --- | --- |
 | Just open it (Windows) | Double-click `launch.cmd` |
+| Install it as a desktop app (Windows) | Run `BunnyMediaHub-Setup-<version>.exe` from [releases](https://github.com/CortexIAC/media-hub/releases) |
 | Development with hot reload | `npm install` then `npm run dev` |
 | Run the built app | `npm run build` then `npm start` |
 
 `launch.cmd` installs dependencies the first time, rebuilds the app from the current source on every launch (so it never runs stale code), then starts Electron. You can also run `node_modules\.bin\electron .` after a manual `npm run build`.
 
 Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a desktop session with audio output. No account, key or network connection is required for local playback.
+
+## Build an installer and update it
+
+```bash
+npm run dist          # per-user NSIS installer in release/, about 118 MB
+npm run release:win   # tag, push and publish the current version to GitHub
+npm run check:updater # drive the packaged app's updater against the live feed
+```
+
+Installed copies check `CortexIAC/media-hub` for a newer release in **Settings → Updates**.
+Downloads happen only when you press the button, they are checked against the SHA-512
+in `latest.yml`, and installing restarts the app into the new version. The build is
+unsigned, so Windows shows an unknown-publisher warning on first install. Details,
+failure modes and the exact verified results are in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## What works today
 
@@ -35,7 +50,7 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Streams**: paste a direct media URL, an HLS (`.m3u8`) playlist or an M3U/PLS channel list. Links are checked before they are saved, a channel list is expanded into entries, and playback survives leaving the screen (the player docks to the corner). Formats Chromium cannot decode — MKV, AVI, MPEG-TS, HEVC — are handed to VLC with the same URL instead of failing silently.
 - **Suggested streams on first launch**: a small curated set of *legal, publicly offered* links — public radio (SomaFM, Radio Paradise, Radio Swiss Classic), NASA's public live HLS stream, and public-domain film and audiobooks from the Internet Archive. They are added once; delete any you do not want and they stay deleted. No IPTV lists, trackers or indexer APIs are bundled.
 - **YouTube**: search with no key at all — from the Video screen or the search field at the top — then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. The player docks to the corner while you browse other screens (a video keeps playing while you look through the library, and it stays visible on purpose: YouTube's terms forbid hidden playback). A Data API key is optional and only changes the search path.
-- **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
+- **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information, and a **Updates** panel that reports the installed version and can check, download and install a new release from GitHub.
 
 ## What is planned, not built
 
@@ -48,10 +63,14 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 184 unit tests (vitest)
+npm test             # 192 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
+npm run dist         # Windows installer (NSIS, per-user) into release/
+npm run release:win  # build, tag and publish a GitHub release
+npm run check:updater # packaged app: check → download against the live feed
+node scripts/check-updater.mjs        # same check with EXPECT/DOWNLOAD options
 node scripts/check-youtube.mjs        # live YouTube search → real playback check (needs a build)
 node scripts/check-youtube-dock.mjs   # live check that playback survives leaving the Video screen
 node scripts/check-streams.mjs        # live stream check: local server + M3U import + HLS playback

@@ -1,6 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { IPC, type UpdateNotes, type UpdateStatus } from '@shared/ipc'
+import { releaseNotesToText, type ReleaseNotesInput } from '@core/releaseNotes'
 
 /**
  * Windows update handling.
@@ -22,10 +23,7 @@ export interface UpdaterOptions {
 }
 
 function notesToText(notes: UpdateNotes): string | null {
-  if (!notes) return null
-  const text = Array.isArray(notes) ? notes.map((entry) => entry.note ?? '').join('\n\n') : notes
-  const trimmed = text.replace(/\r/g, '').trim()
-  return trimmed.length === 0 ? null : trimmed.slice(0, 4000)
+  return releaseNotesToText(notes as ReleaseNotesInput)
 }
 
 export class UpdateService {

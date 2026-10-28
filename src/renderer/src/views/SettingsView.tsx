@@ -473,8 +473,8 @@ export function SettingsView(): ReactElement {
             </tbody>
           </table>
           <p className="faint" style={{ fontSize: 11.5, margin: 0, lineHeight: 1.6 }}>
-            Sprint 1 build. No accounts, telemetry or network requests. Provider integrations and video are documented as planned,
-            not implemented.
+            No accounts and no telemetry. The app contacts the services listed above, GitHub for updates, and nothing else; all
+            settings, playlists and saved shows stay in the data folder shown here.
           </p>
         </section>
 

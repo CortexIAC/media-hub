@@ -14,6 +14,8 @@
     "dist": "npm run build && electron-builder --win --publish never",
     "dist:dir": "npm run build && electron-builder --win --dir --publish never",
     "release": "npm run build && electron-builder --win --publish always",
+    "release:win": "node scripts/release.mjs",
+    "check:updater": "node scripts/check-updater.mjs",
     "icon": "node scripts/make-icon.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",

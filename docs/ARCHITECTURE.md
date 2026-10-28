@@ -128,6 +128,18 @@ YouTube playback outlives any single view, so its state is not owned by a view:
 - Theme tokens live in `styles/theme.css`; the accent is a single CSS variable (`--accent`) that a future BunnyOS appearance service can set.
 - Keyboard shortcuts: Space, Ctrl/⌘+←/→, arrows, ↑/↓, M/S/R, Ctrl+F, Ctrl+I, Ctrl+Shift+Q.
 
+### Packaging and updates
+
+`electron-builder.yml` produces a single NSIS installer (one-click, per-user, no elevation) and embeds `resources/app-update.yml` describing the release repository. `electron-updater` is a real runtime dependency — it is bundled into the asar rather than inlined into `out/main`, because it locates that file relative to its own packaged path.
+
+`main/updater.ts` owns one `UpdateStatus` object. Every phase change (`checking`, `available`, `downloading`, `downloaded`, `error`) is pushed to the renderer over `update:changed`, so Settings renders state without polling. Deliberate rules:
+
+- Discovery and download are separate. `autoDownload` is off; a check only reports availability.
+- `autoInstallOnAppQuit` applies only after a download has completed, so closing the app never drops a verified package or installs an unrequested one.
+- `install()` flushes every JSON store and stops the scanner before `quitAndInstall`, so an update cannot lose library, playlist, session, stream or Archive state.
+- Builds running from source report `packaged: false` and refuse to check, so a dev session can never replace itself.
+- Failures are classified (offline, no published release, integrity failure) into readable messages instead of surfacing stack traces in the panel.
+
 ## Security boundaries
 
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`.
@@ -138,6 +150,7 @@ YouTube playback outlives any single view, so its state is not owned by a view:
 - Permission requests (camera, microphone, notifications) are denied.
 - External navigation is blocked; only validated http(s) URLs are handed to `shell.openExternal`.
 - The renderer performs no network requests: catalogue search, media reads and file access all happen in the main process.
+- Update checks and downloads happen only in the main process, only against the release repository baked into `app-update.yml` over HTTPS, and only for a package whose SHA-512 matches `latest.yml`. No GitHub token ships with the app, and the payload is never executed by the renderer.
 
 ## Deliberate omissions
 

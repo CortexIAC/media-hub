@@ -2,6 +2,8 @@
 
 Verified against `package.json` / `package-lock.json` and the installed `node_modules` on 28 October 2026. No dependency was added for the Internet Archive tab: search, metadata, episode parsing, subtitle conversion and storage use built-in `fetch`/`TextDecoder` and the existing JSON store.
 
+Two dependencies were added for packaging and updates: `electron-updater` (ships with the app, MIT) and `electron-builder` (build-time only, MIT). electron-builder's own dependency tree, including the NSIS and 7-Zip binaries it downloads on first use, is build tooling and is not part of the installed application.
+
 ## Runtime dependencies (shipped inside the app bundle)
 
 | Package | Version | Licence | Role |
@@ -11,11 +13,15 @@ Verified against `package.json` / `package-lock.json` and the installed `node_mo
 | react-dom | 19.3.1 | MIT | UI rendering |
 | music-metadata | 12.3.2 | MIT | Tag, duration and artwork parsing |
 | hls.js | 1.7.3 | Apache-2.0 | HLS (`.m3u8`) playback in the renderer; loaded as a separate lazily-imported chunk |
+| electron-updater | 6.8.11 | MIT | Update checks, downloads and install hand-over in the main process. Required at runtime from `node_modules` (bundled into the asar, not inlined into `out/main`) |
 
 Bundled transitively by the above (all permissive):
 
-- **MIT** — `@borewit/text-codec`, `@tokenizer/inflate`, `@tokenizer/token`, `content-type`, `debug`, `file-type`, `media-typer`, `ms`, `strtok3`, `token-types`, `uint8array-extras`, `win-guid`, `scheduler`
+- **MIT** — `@borewit/text-codec`, `@tokenizer/inflate`, `@tokenizer/token`, `content-type`, `debug`, `file-type`, `media-typer`, `ms`, `strtok3`, `token-types`, `uint8array-extras`, `win-guid`, `scheduler`; from the updater: `builder-util-runtime`, `fs-extra`, `jsonfile`, `js-yaml`, `lazy-val`, `lodash.escaperegexp`, `lodash.isequal`, `tiny-typed-emitter`, `universalify`
 - **BSD-3-Clause** — `ieee754`
+- **ISC** — `graceful-fs`, `semver`
+- **BlueOak-1.0.0** — `sax` (via `js-yaml`)
+- **Python-2.0** — `argparse` (via `js-yaml`)
 
 No GPL, LGPL or AGPL code is present in the shipped bundle.
 
@@ -29,7 +35,8 @@ No GPL, LGPL or AGPL code is present in the shipped bundle.
 | typescript | 5.9.3 | Apache-2.0 | Types |
 | @vitejs/plugin-react | 6.1.2 | MIT | JSX transform |
 | @types/node, @types/react, @types/react-dom | — | MIT | Type declarations |
-| playwright-core | 1.64.1 | Apache-2.0 | Drives Electron in e2e tests |
+| playwright-core | 1.64.1 | Apache-2.0 | Drives Electron in e2e tests and in `scripts/check-*.mjs` |
+| electron-builder | 26.18.0 | MIT | Windows NSIS installer, icon/version resources, GitHub release upload |
 | @breezystack/lamejs | 1.2.7 | LGPL-3.0 | MP3 **fixture encoding only** (test helper) |
 | libflacjs | 5.6.0 | MIT | FLAC **fixture encoding only** (test helper) |
 

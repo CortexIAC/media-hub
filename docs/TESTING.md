@@ -13,12 +13,14 @@ node scripts/check-youtube.mjs        # live YouTube search → embedded playbac
 node scripts/check-youtube-dock.mjs   # live: playback survives leaving the Video screen, search finds videos
 node scripts/check-streams.mjs        # live streams: loopback server, M3U import, HLS playback, MKV fallback
 node scripts/check-archive.mjs        # live Archive: real archive.org search, save, playback, captions, restart
+node scripts/check-updater.mjs        # packaged app: check → download against the live GitHub feed
+npm run dist                          # builds the installer; the updater check needs release/win-unpacked
 ```
 
 ## Automated results
 
 ```
-Unit + integration:  13 files, 184 tests, all passing (~25 s)
+Unit + integration:  14 files, 192 tests, all passing (~22 s)
 End-to-end:          1 file, 9 tests, all passing (~37 s; one 91 s run observed under machine load)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
@@ -27,6 +29,8 @@ Live dock check:     plays on the Video stage, keeps playing docked on Music/Sea
 Live stream check:   17/17 checks (preloaded radio, local server, real HLS playback, MKV hand-off)
 Live Archive check:  23/23 checks (real search, widened collection search, 13 labelled episodes, save,
                      playback clock advances, attached SRT reaches 2 cues, restart persistence)
+Updater check:       14/14 checks (0.1.0 build found, downloaded and verified the published 0.1.1 release)
+                     10/10 checks (0.1.1 build reports "up to date" against the same feed)
 ```
 
 Coverage by area:
@@ -44,6 +48,7 @@ Coverage by area:
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
 | Internet Archive parsing | `tests/library/archive.test.ts` | episode labels for `S01E02`, `1x07`, `Episode 12`, `Part 3` and leading numbers; derivative dedupe (original mp4 beats `.ia.mp4`/`_512kb`/`.ogv`); duration parsing (`14314.54`, `59:59`, `1:02:03.5`); item parsing with caption matching, dark items and path traversal; search-hit sanitising; relevance ranking; SRT and WebVTT conversion, UTF-16LE decoding; saved-record sanitising |
 | Stream storage | `tests/library/streamStore.test.ts` | first-launch seeding happens once and is remembered, a deleted suggestion stays deleted after reload, duplicate URLs collapse, rename/mark-played keep other fields, magnet links and duplicates are dropped on load |
+| Release notes | `tests/core/releaseNotes.test.ts` | electron-builder's HTML-ish commit body flattened to plain text, list items on their own lines, escaped `\n` sequences, entity decoding, paragraph breaks preserved, per-version arrays joined, empty notes rejected, output bounded |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
 | Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, lyrics in Now Playing, equalizer + bass/boost, measured audio at the output node (peak > 0 with the EQ on), AudioContext resume after suspension, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
@@ -121,6 +126,21 @@ Not covered:
 - **Splitting a single-file compilation** — impossible without re-encoding or chapter metadata; deliberately not attempted.
 - **Item-supplied captions** — the pipeline exists (`subtitles/remote`, matching by base name), but the archive's caption files returned 0 bytes on every TV item sampled, so it could not be proven with real data. The attach path is what is verified.
 - **VLC hand-off from an archive episode** — same manual limitation as the Streams screen.
+
+## Update verification (28 October 2026)
+
+`scripts/check-updater.mjs` drives the **packaged** app (`release/win-unpacked`) rather than the source build, because the updater is inert outside an installed build. It clicks through Settings → Updates and asserts the status the main process reports over IPC.
+
+| Run | Expectation | Result |
+| --- | --- | --- |
+| Empty repository | conclusive `error` mentioning the missing release | pass, 8/8 |
+| 0.1.0 installed, v0.1.0 published | `up-to-date` | pass, 9/9 |
+| 0.1.1 installed, v0.1.1 published | `up-to-date` | pass, 10/10 |
+| 0.1.0 installed, v0.1.1 published, `DOWNLOAD=1` | `available` → 100% → `downloaded` | pass, 14/14 (re-run against the final 0.1.1 artifact) |
+
+The downloaded package was cached at `%LOCALAPPDATA%\bunny-media-hub-updater\pending\BunnyMediaHub-Setup-0.1.1.exe`, and the panel offered **Restart and install**. The install itself is deliberately not automated: running it would replace the app under the test process. That final step is the manual check in [RELEASING.md](RELEASING.md#test-an-update).
+
+Release mechanics (tag-before-release, token handling, transient upload retries) are covered in [RELEASING.md](RELEASING.md).
 
 ## Supported audio formats (tested)
 

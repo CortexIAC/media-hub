@@ -10,7 +10,9 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 - Frameless shell: sidebar, content area, persistent playback bar, Now Playing view, queue panel, search, settings, toasts, modals, keyboard shortcuts.
 - Folder import, incremental scan in a worker thread, metadata + embedded artwork extraction, artwork cache.
 - Real audio playback (MP3, WAV, FLAC verified) with seek, volume, mute, next/previous, shuffle, repeat off/all/one.
-- Five-band Web Audio equalizer with five presets, persisted, verified to keep playback running.
+- Five-band Web Audio equalizer with presets, an independent extra-bass low shelf, and an output boost up to 300% behind a soft limiter; all persisted and verified to keep playback running.
+- Lyrics from embedded tags, `.lrc`/`.txt` sidecars and LRCLIB, with synced-line highlighting in Now Playing.
+- Fixed a silent-after-unpause bug: Chromium can suspend an idle AudioContext, which silences the element; the player now always resumes the graph before playback and on `statechange`.
 - Queue add/remove/jump, playlists (create, rename, add, remove, reorder, delete), favorites.
 - Persistence of library, playlists, favorites, settings, equalizer and the last session across restarts.
 - Robust handling of missing files, unreadable folders, corrupt and empty files, and recognised-but-unsupported extensions.
@@ -47,8 +49,8 @@ node scripts/check-discovery.mjs   # live catalogue smoke test
 
 ## 4. Automated test results
 
-- Unit/integration: **97 passed** (queue, player controller, search, discovery helpers, scanner, persistence, byte ranges).
-- End-to-end: **9 passed** (launch, import, MP3 playback/transport, FLAC playback, equalizer + playback, Virtual Library, queue/favorites/playlists/search/settings, restart persistence, clean shutdown).
+- Unit/integration: **109 passed** (queue, player controller, search, discovery helpers, lyrics parsing, scanner, persistence, byte ranges).
+- End-to-end: **9 passed** (launch, import, MP3 playback/transport, FLAC playback, lyrics, equalizer + bass/boost + AudioContext resume, Virtual Library, queue/favorites/playlists/search/settings, restart persistence, clean shutdown).
 - One transient e2e timeout occurred once in four full runs; it passed on immediate re-run. Documented in [TESTING.md](TESTING.md).
 
 ## 5. Formats tested
@@ -73,10 +75,11 @@ Cold start ≈ 0.65–0.70 s. 300-track import ≈ 1.0–1.4 s (3–5 ms/track) 
 2. Album grouping is by album + album-artist, so compilations can split into multiple album entries.
 3. Gutendex is unreachable from this network; the Gutenberg source falls back to the Internet Archive mirror.
 4. No in-app browser: catalogue and YouTube results open in the system browser.
-5. Equalizer is global (not per device or per track) and has no analyser.
-6. E2E playback assertion is timing-sensitive on a fresh build (one flake observed).
-7. Artwork is cached at full embedded resolution; very large embedded images are stored as-is (12 MB cap).
-8. No packaging/installer: `npm start` and `launch.cmd` run the app from source/build output.
+5. Equalizer and boost are global (not per device or per track) and there is no analyser; aggressive boost settings can still sound loud even with the limiter.
+6. Lyrics depend on LRCLIB coverage for tracks without local lyrics; instrumental detection comes from LRCLIB metadata only.
+7. E2E playback assertions are timing-sensitive on a fresh build (two flakes observed across runs, both passing on re-run).
+8. Artwork is cached at full embedded resolution; very large embedded images are stored as-is (12 MB cap).
+9. No packaging/installer: `npm start` and `launch.cmd` run the app from source/build output.
 
 ## 10. Version control
 

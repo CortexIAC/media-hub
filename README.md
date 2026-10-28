@@ -25,7 +25,8 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Local library**: import a folder, incremental scanning in a worker thread, metadata and embedded cover art, album/artist/track browsing, search.
 - **Real playback** through Chromium's audio pipeline with a custom `bunny-media://` protocol (HTTP range support, no filesystem paths in the renderer).
 - **Transport**: play/pause, seek, volume, next/previous, shuffle, repeat one/all, queue panel, drag-free queue management.
-- **Equalizer**: five bands (60 Hz – 14 kHz), presets, persisted; implemented with Web Audio filters inside the player.
+- **Equalizer**: five bands (60 Hz – 14 kHz), presets, an independent **extra-bass** slider (80 Hz low shelf) and an **audio boost** slider up to 300% with a soft limiter — all persisted and applied inside the player.
+- **Lyrics**: embedded tags, `.lrc`/`.txt` sidecar files, and an LRCLIB lookup as a fallback, with synced lines following the playhead in Now Playing.
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
 - **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive. Optional YouTube Data API search.
 - **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
@@ -41,7 +42,7 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 97 unit tests (vitest)
+npm test             # 109 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
@@ -58,9 +59,9 @@ Everything is local JSON under Electron's `userData` folder:
 ~/Library/Application Support/Bunny Media Hub/   (macOS)
 ~/.config/Bunny Media Hub/   (Linux)
 
-library.json     folders, tracks, last scan summary
+library.json     folders, tracks (including lyrics found at scan time), last scan summary
 playlists.json   playlists and favorites
-settings.json    volume, equalizer, accent, YouTube key
+settings.json    volume, equalizer curve, boost, bass, accent, YouTube key
 session.json     last track, queue and position
 artwork/         cached cover images (deduplicated by hash)
 ```
@@ -71,6 +72,7 @@ Settings → Library → **Open data folder** takes you there.
 
 - Open Library, Project Gutenberg, LibriVox and the Internet Archive are queried through their public read APIs, with a descriptive User-Agent, bounded timeouts and no retries in a loop.
 - YouTube search is optional and needs your own Data API v3 key. Results open on youtube.com: YouTube's developer policies forbid extracting audio, hiding the player, or background playback, so this app does not do any of that.
+- Lyrics come from your files first. When neither a tag nor a sidecar file exists, the app asks [LRCLIB](https://lrclib.net), a free open lyrics service; only the track title, artist, album and duration are sent.
 - Copyrighted books (for example Margaret Peterson Haddix's *The Missing* series) are **not** downloadable here. Open Library links to legal borrowing; your local library's Libby/OverDrive catalogue is the usual free route.
 
 ## Project layout

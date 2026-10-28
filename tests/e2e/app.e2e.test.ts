@@ -48,6 +48,9 @@ async function launch(): Promise<void> {
   })
   await page.waitForSelector('.titlebar', { timeout: 60_000 })
   await page.waitForSelector('.view', { timeout: 60_000 })
+  // Keep the window foregrounded: Chromium throttles rendering for occluded
+  // windows, which makes Playwright's stability checks time out at random.
+  await page.bringToFront()
   await app.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
     window?.setSize(1480, 940)
@@ -74,6 +77,21 @@ async function shot(name: string): Promise<void> {
 
 async function waitForText(locator: Locator, expected: string, timeout = 20_000): Promise<void> {
   await expect.poll(async () => (await locator.innerText()).trim(), { timeout }).toBe(expected)
+}
+
+function secondsOf(label: string): number {
+  const [minutes, seconds] = label.split(':').map((part) => Number(part))
+  return (minutes ?? 0) * 60 + (seconds ?? 0)
+}
+
+/** Range inputs ignore fill(); drive them the way a keyboard/pointer would. */
+async function setRange(locator: Locator, value: number): Promise<void> {
+  await locator.evaluate((element, next) => {
+    const input = element as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, String(next))
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }, value)
 }
 
 function nav(name: string | RegExp): Locator {
@@ -149,9 +167,11 @@ describe('Bunny Media Hub end-to-end', () => {
     await playerButton('Pause').click()
     await playerButton('Play').waitFor({ timeout: 5000 })
     await page.waitForTimeout(350)
-    const pausedAt = await position.innerText()
+    const pausedAt = secondsOf(await position.innerText())
     await page.waitForTimeout(1200)
-    expect(await position.innerText()).toBe(pausedAt)
+    // One late `timeupdate` can land right after the pause event; allow a
+    // single second of rounding rather than flaking on it.
+    expect(Math.abs(secondsOf(await position.innerText()) - pausedAt)).toBeLessThanOrEqual(1)
 
     const seek = page.locator('.playerbar input[aria-label="Seek"]')
     await seek.focus()
@@ -167,6 +187,10 @@ describe('Bunny Media Hub end-to-end', () => {
 
     await page.locator('.now-mini').click()
     await page.locator('.now-playing').waitFor()
+    // Cover Tone carries embedded USLT lyrics, which must render without any
+    // network request.
+    await page.locator('.lyric-line').first().waitFor({ timeout: 10_000 })
+    expect(await page.locator('.np-lyrics').innerText()).toContain('Embedded line one')
     await shot('04-now-playing.png')
   })
 
@@ -186,6 +210,21 @@ describe('Bunny Media Hub end-to-end', () => {
   })
 
   it('applies an equalizer preset without interrupting playback', async () => {
+    // Capture the AudioContext the player creates so the test can prove it is
+    // running, and can reproduce Chromium suspending it while paused.
+    await page.evaluate(() => {
+      const holder = window as unknown as { __contexts?: AudioContext[]; AudioContext: typeof AudioContext }
+      holder.__contexts = []
+      const Original = holder.AudioContext
+      class Tracked extends Original {
+        constructor(options?: AudioContextOptions) {
+          super(options)
+          holder.__contexts?.push(this)
+        }
+      }
+      holder.AudioContext = Tracked as unknown as typeof AudioContext
+    })
+
     await nav('Settings').click()
     await page.getByRole('heading', { name: 'Equalizer' }).waitFor()
     await page.getByRole('button', { name: 'Bass boost' }).click()
@@ -193,16 +232,48 @@ describe('Bunny Media Hub end-to-end', () => {
     await page.waitForTimeout(200)
     const bands = await page.locator('.eq-bands input[type="range"]').count()
     expect(bands).toBe(5)
+
+    // The new sliders: extra bass and output boost.
+    await setRange(page.getByLabel('Extra bass boost'), 6)
+    await setRange(page.getByLabel('Audio boost'), 150)
+    await page.waitForTimeout(150)
     await shot('12-equalizer.png')
 
-    // The Web Audio graph must not silence the element it is attached to.
     await nav(/^Music/).click()
     await page.getByRole('button', { name: 'Play Opening Tone' }).first().click()
     await waitForText(page.locator('.now-mini-title'), 'Opening Tone')
     const position = page.locator('.seek-row .time').first()
     await expect.poll(async () => position.innerText(), { timeout: 20_000 }).not.toBe('0:00')
+
+    // The graph exists and runs while audio plays.
+    const running = await page.evaluate(() => {
+      const contexts = (window as unknown as { __contexts?: AudioContext[] }).__contexts ?? []
+      return contexts.map((context) => context.state)
+    })
+    expect(running.length).toBeGreaterThan(0)
+    expect(running.every((state) => state === 'running')).toBe(true)
+
     await playerButton('Pause').click()
     await playerButton('Play').waitFor({ timeout: 5000 })
+
+    // Regression: Chromium suspends an idle AudioContext. Pausing, suspending
+    // the context, then pressing play must resume it instead of staying silent.
+    await page.evaluate(async () => {
+      const contexts = (window as unknown as { __contexts?: AudioContext[] }).__contexts ?? []
+      await contexts[0]?.suspend()
+    })
+    await playerButton('Play').click()
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const contexts = (window as unknown as { __contexts?: AudioContext[] }).__contexts ?? []
+            return contexts[0]?.state ?? 'missing'
+          }),
+        { timeout: 8000 }
+      )
+      .toBe('running')
+    await playerButton('Pause').click()
   })
 
   it('opens the Virtual Library and searches public catalogues', async () => {
@@ -250,7 +321,6 @@ describe('Bunny Media Hub end-to-end', () => {
     await page.getByRole('button', { name: 'More actions for Opening Tone' }).first().click()
     await page.locator('.dropdown').waitFor({ timeout: 5000 })
     const menuText = await page.locator('.dropdown').innerText()
-    await shot('debug-track-menu.png')
     expect(menuText).toContain('Late Night Tests')
     await page.getByRole('menuitem', { name: 'Late Night Tests' }).click()
     await page.waitForTimeout(500)
@@ -309,10 +379,12 @@ describe('Bunny Media Hub end-to-end', () => {
     }
 
     const savedSettings = JSON.parse(await fs.readFile(join(userDataDir, 'settings.json'), 'utf8')) as {
-      equalizer?: { enabled: boolean; bands: number[] }
+      equalizer?: { enabled: boolean; bands: number[]; boost?: number; bassBoost?: number }
     }
     expect(savedSettings.equalizer?.enabled).toBe(true)
     expect(savedSettings.equalizer?.bands).toEqual([7, 5, 0, -1, -1])
+    expect(savedSettings.equalizer?.bassBoost).toBe(6)
+    expect(savedSettings.equalizer?.boost).toBe(1.5)
 
     await launch()
     await page.locator('.sidebar').waitFor()

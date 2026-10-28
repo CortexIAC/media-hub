@@ -122,6 +122,35 @@ describe('readTrack', () => {
     expect(track.issues).toEqual([])
   })
 
+  it('reads a sidecar .lrc file and an embedded lyrics tag', async () => {
+    const wavStat = await fs.stat(fixtures.taggedWav)
+    const wav = await readTrack(
+      { path: fixtures.taggedWav, mtimeMs: wavStat.mtimeMs, fileSize: wavStat.size },
+      { folderId: 'folder-one', artworkDir }
+    )
+    expect(wav.track.lyricsSource).toBe('sidecar')
+    expect(wav.track.lyrics).toContain('First light over the garden')
+    expect(wav.track.lyrics).toContain('[00:03.50]')
+
+    const mp3Stat = await fs.stat(fixtures.taggedMp3)
+    const mp3 = await readTrack(
+      { path: fixtures.taggedMp3, mtimeMs: mp3Stat.mtimeMs, fileSize: mp3Stat.size },
+      { folderId: 'folder-two', artworkDir }
+    )
+    expect(mp3.track.lyricsSource).toBe('embedded')
+    expect(mp3.track.lyrics).toContain('Embedded line one')
+  })
+
+  it('reports no lyrics when neither sidecar nor tag exists', async () => {
+    const stat = await fs.stat(fixtures.secondMp3)
+    const { track } = await readTrack(
+      { path: fixtures.secondMp3, mtimeMs: stat.mtimeMs, fileSize: stat.size },
+      { folderId: 'folder-two', artworkDir }
+    )
+    expect(track.lyrics).toBeNull()
+    expect(track.lyricsSource).toBeNull()
+  })
+
   it('reads MP3 tags and caches embedded artwork', async () => {
     const stat = await fs.stat(fixtures.taggedMp3)
     const { track, failure } = await readTrack(

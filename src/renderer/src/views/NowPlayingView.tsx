@@ -3,6 +3,7 @@ import { formatDuration, formatFileSize, formatLongDuration, formatSampleRate } 
 import { displayArtist } from '@core/models'
 import { Artwork } from '../components/Artwork'
 import { DropdownMenu, type MenuEntry } from '../components/DropdownMenu'
+import { LyricsPanel } from '../components/LyricsPanel'
 import { EmptyState } from '../components/EmptyState'
 import {
   HeartIcon,
@@ -170,6 +171,8 @@ export function NowPlayingView(): ReactElement {
               {Math.round((state?.volume ?? 0.8) * 100)}%
             </span>
           </div>
+
+          <LyricsPanel trackId={track.id} positionMs={state?.positionMs ?? 0} />
 
           <div className="np-upsell">
             <h3 style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>File details</h3>

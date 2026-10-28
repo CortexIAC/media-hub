@@ -34,6 +34,9 @@ export interface Track {
   lossless: boolean
   /** Cache key for extracted cover art, or null when none was embedded. */
   artworkId: string | null
+  /** Raw lyrics text (LRC or plain), when found locally. */
+  lyrics: string | null
+  lyricsSource: 'embedded' | 'sidecar' | null
   fileSize: number
   mtimeMs: number
   addedAt: number
@@ -112,7 +115,17 @@ export interface EqualizerSettings {
   enabled: boolean
   /** Gain in dB per band, in the same order as EQ_FREQUENCIES. */
   bands: number[]
+  /** Output gain multiplier applied after the EQ (1 = no boost). */
+  boost: number
+  /** Extra low-shelf boost in dB, independent of the graphic EQ. */
+  bassBoost: number
 }
+
+export const BOOST_MIN = 1
+
+export const BOOST_MAX = 3
+
+export const BASS_BOOST_MAX = 12
 
 export const EQ_FREQUENCIES = [60, 230, 910, 3600, 14_000] as const
 
@@ -140,7 +153,9 @@ export const EQ_PRESETS: readonly EqualizerPreset[] = [
 
 export const DEFAULT_EQUALIZER: EqualizerSettings = {
   enabled: false,
-  bands: [0, 0, 0, 0, 0]
+  bands: [0, 0, 0, 0, 0],
+  boost: 1,
+  bassBoost: 0
 }
 
 export interface AppSettings {
@@ -170,18 +185,32 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export function sanitizeEqualizer(raw: unknown): EqualizerSettings {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Partial<EqualizerSettings>
   const bands = Array.isArray(source.bands) ? source.bands : []
+  const boost = typeof source.boost === 'number' && Number.isFinite(source.boost) ? source.boost : 1
+  const bassBoost =
+    typeof source.bassBoost === 'number' && Number.isFinite(source.bassBoost) ? source.bassBoost : 0
   return {
     enabled: source.enabled === true,
     bands: EQ_FREQUENCIES.map((_frequency, index) => {
       const value = bands[index]
       if (typeof value !== 'number' || !Number.isFinite(value)) return 0
       return Math.min(EQ_MAX_DB, Math.max(EQ_MIN_DB, Math.round(value * 10) / 10))
-    })
+    }),
+    boost: Math.min(BOOST_MAX, Math.max(BOOST_MIN, Math.round(boost * 100) / 100)),
+    bassBoost: Math.min(BASS_BOOST_MAX, Math.max(0, Math.round(bassBoost * 10) / 10))
   }
 }
 
 export function equalizerIsFlat(equalizer: EqualizerSettings): boolean {
-  return equalizer.bands.every((gain) => Math.abs(gain) < 0.05)
+  return (
+    equalizer.bands.every((gain) => Math.abs(gain) < 0.05) &&
+    equalizer.boost <= 1.005 &&
+    equalizer.bassBoost < 0.05
+  )
+}
+
+/** True when the audio graph must exist for the current settings. */
+export function equalizerNeedsGraph(equalizer: EqualizerSettings): boolean {
+  return equalizer.enabled || equalizer.boost > 1.005 || equalizer.bassBoost >= 0.05
 }
 
 /** File extensions the scanner will attempt to read. */

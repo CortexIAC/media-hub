@@ -50,7 +50,8 @@ export const IPC = {
   windowClose: 'window:close',
   windowIsMaximized: 'window:is-maximized',
   providersList: 'providers:list',
-  discoverySearch: 'discovery:search'
+  discoverySearch: 'discovery:search',
+  lyricsGet: 'lyrics:get'
 } as const
 
 export interface ImportResult {
@@ -88,6 +89,14 @@ export interface PlaylistState {
 
 export interface LibraryViewState extends LibrarySnapshot {
   scanning: ScanProgress | null
+}
+
+export interface LyricsResult {
+  text: string
+  synced: boolean
+  source: 'local' | 'lrclib'
+  provider: string | null
+  providerUrl: string | null
 }
 
 export interface BunnyApi {
@@ -139,6 +148,9 @@ export interface BunnyApi {
   }
   discovery: {
     search(query: string, kinds?: DiscoveryKind[]): Promise<DiscoveryResponse>
+  }
+  lyrics: {
+    get(trackId: string): Promise<LyricsResult | null>
   }
 }
 

@@ -39,6 +39,8 @@ function makeTrack(id: string, folderId: string, overrides: Partial<Track> = {})
     channels: 2,
     lossless: false,
     artworkId: null,
+    lyrics: null,
+    lyricsSource: null,
     fileSize: 10,
     mtimeMs: 1,
     addedAt: 1,
@@ -252,6 +254,13 @@ describe('settings and session persistence', () => {
     })
     expect(clamped.equalizer.enabled).toBe(true)
     expect(clamped.equalizer.bands).toEqual([12, -12, 3, 0, 2.3])
+    expect(clamped.equalizer.boost).toBe(1)
+    expect(clamped.equalizer.bassBoost).toBe(0)
+
+    const boosted = sanitizeSettings({ equalizer: { boost: 9, bassBoost: 40 } })
+    expect(boosted.equalizer.boost).toBe(3)
+    expect(boosted.equalizer.bassBoost).toBe(12)
+    expect(sanitizeSettings({ equalizer: { boost: 0.2 } }).equalizer.boost).toBe(1)
 
     expect(sanitizeSettings({ equalizer: { bands: 'loud' } }).equalizer).toEqual(DEFAULT_SETTINGS.equalizer)
     expect(sanitizeSettings({ youtubeApiKey: '  abc123  ' }).youtubeApiKey).toBe('abc123')

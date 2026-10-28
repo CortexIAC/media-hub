@@ -56,6 +56,9 @@ const api: BunnyApi = {
   },
   discovery: {
     search: (query, kinds) => ipcRenderer.invoke(IPC.discoverySearch, query, kinds)
+  },
+  lyrics: {
+    get: (trackId) => ipcRenderer.invoke(IPC.lyricsGet, trackId)
   }
 }
 

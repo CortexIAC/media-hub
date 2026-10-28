@@ -224,6 +224,9 @@ function sanitizeTrack(track: Track): Track {
     mtimeMs: finite(track.mtimeMs, 0),
     addedAt: finite(track.addedAt, Date.now()),
     updatedAt: finite(track.updatedAt, Date.now()),
+    lyrics: typeof track.lyrics === 'string' ? track.lyrics : null,
+    lyricsSource:
+      track.lyricsSource === 'embedded' || track.lyricsSource === 'sidecar' ? track.lyricsSource : null,
     issues: Array.isArray(track.issues) ? track.issues.filter((issue): issue is TrackIssue => ISSUES.includes(issue)) : []
   }
 }

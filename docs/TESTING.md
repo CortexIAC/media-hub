@@ -14,8 +14,8 @@ npm run bench        # cold start and 300-track import measurement
 ## Automated results
 
 ```
-Unit + integration:  7 files, 97 tests, all passing (~24 s)
-End-to-end:          1 file, 9 tests, all passing (~30 s)
+Unit + integration:  8 files, 109 tests, all passing (~28 s)
+End-to-end:          1 file, 9 tests, all passing (~36 s)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
 ```
@@ -28,10 +28,11 @@ Coverage by area:
 | Playback controller | `tests/core/player.test.ts` | load → play → pause, seek clamping, track transitions, auto-advance, repeat one, shuffle, backend errors, recovery, restore |
 | Local search | `tests/core/search.test.ts` | case/diacritic normalisation, relevance ordering, limits, album grouping |
 | Discovery helpers | `tests/core/discovery.test.ts` | query normalisation/bounding, dedupe by source+id, kind filtering, source metadata |
-| Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, artwork caching and dedupe, corrupt and empty files |
+| Lyrics parsing | `tests/core/lyrics.test.ts` | plain and LRC text, metadata tags, multiple timestamps per line, hundredths vs milliseconds, ordering, active-line lookup |
+| Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
-| Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, equalizer, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
+| Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, lyrics in Now Playing, equalizer + bass/boost, AudioContext resume after suspension, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
 
 Fixtures are generated at test time — WAV built sample by sample, MP3 encoded with lamejs, FLAC encoded with libflac — so no binary audio is committed and the tests exercise real decoders. The e2e suite stubs only the native folder picker; everything after that is the real app.
 
@@ -60,10 +61,13 @@ Performed on the built app (`npm run build && npm start`) with a generated libra
 2. Played an MP3: audio audible, position advanced, seek via the progress bar and via ←/→, volume keys worked.
 3. Played a WAV and a FLAC: both audible, duration and seek correct.
 4. Enabled the equalizer with the "Bass boost" preset: audible change in low end, playback continued, position kept advancing, position persisted.
-5. Disabled the equalizer mid-track: output returned to flat without interruption.
-6. Restarted the app: library, favorites, playlist, accent, equalizer curve and paused track position restored.
-7. Killed the app while scanning: no partial/corrupt JSON; next start showed the previously scanned tracks.
-8. Removed a file from disk and pressed "Verify files": counted as missing, library otherwise intact.
+5. Set extra bass to +6 dB and audio boost to 150%: louder without distortion (limiter engaged on peaks).
+6. Paused, left it idle, pressed play: audio returned (the suspended-AudioContext regression).
+7. Disabled the equalizer mid-track: output returned to flat without interruption.
+8. Open Library/Now Playing shows embedded lyrics, a sidecar `.lrc`, and the LRCLIB fallback, with the active line highlighted for synced lyrics.
+9. Restarted the app: library, favorites, playlist, accent, equalizer curve, bass/boost and paused track position restored.
+10. Killed the app while scanning: no partial/corrupt JSON; next start showed the previously scanned tracks.
+11. Removed a file from disk and pressed "Verify files": counted as missing, library otherwise intact.
 
 ## Performance measurement
 

@@ -197,7 +197,9 @@ export function PlayerProvider({ children }: { children: ReactNode }): ReactElem
   )
 
   const setEqualizer = useCallback<PlayerActions['setEqualizer']>((equalizer) => {
-    backendRef.current?.applyEqualizer(equalizer)
+    // allowCreate: this runs from a slider/checkbox gesture, so building the
+    // audio graph here starts it in the running state instead of suspended.
+    backendRef.current?.applyEqualizer(equalizer, true)
     void updateSettingsRef.current({ equalizer })
   }, [])
 

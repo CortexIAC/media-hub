@@ -1,5 +1,5 @@
 import type { EqualizerSettings } from '@core/models'
-import { EQ_FREQUENCIES } from '@core/models'
+import { DEFAULT_EQUALIZER, EQ_FREQUENCIES, equalizerNeedsGraph } from '@core/models'
 import type { PlaybackBackend, PlaybackBackendEvent, PlaybackSource } from '@core/playback'
 
 /**
@@ -18,7 +18,9 @@ export class HtmlAudioBackend implements PlaybackBackend {
   private disposed = false
   private context: AudioContext | null = null
   private filters: BiquadFilterNode[] = []
-  private equalizer: EqualizerSettings = { enabled: false, bands: [0, 0, 0, 0, 0] }
+  private bassFilter: BiquadFilterNode | null = null
+  private boostGain: GainNode | null = null
+  private equalizer: EqualizerSettings = DEFAULT_EQUALIZER
 
   constructor() {
     this.audio = new Audio()
@@ -89,14 +91,30 @@ export class HtmlAudioBackend implements PlaybackBackend {
    * The graph is created lazily from a user gesture (play / moving a slider),
    * because a suspended AudioContext would silence the element.
    */
-  applyEqualizer(settings: EqualizerSettings): void {
-    this.equalizer = { enabled: settings.enabled, bands: [...settings.bands] }
-    if (this.context) this.writeGains()
+  applyEqualizer(settings: EqualizerSettings, allowCreate = false): void {
+    this.equalizer = {
+      enabled: settings.enabled,
+      bands: [...settings.bands],
+      boost: settings.boost,
+      bassBoost: settings.bassBoost
+    }
+    if (this.context) {
+      this.writeGains()
+    } else if (allowCreate && equalizerNeedsGraph(this.equalizer)) {
+      // Called from a slider drag, which is a user gesture: safe to build and
+      // start the audio graph immediately.
+      void this.ensureGraph()
+    }
   }
 
   async play(): Promise<void> {
     try {
-      if (this.equalizer.enabled) await this.ensureGraph()
+      if (equalizerNeedsGraph(this.equalizer)) await this.ensureGraph()
+      // A context that Chromium suspended while paused would silence the
+      // element even though the clock keeps running, so always resume it.
+      if (this.context && this.context.state === 'suspended') {
+        await this.context.resume().catch(() => undefined)
+      }
       await this.audio.play()
     } catch (error) {
       if (error instanceof DOMException && error.name === 'NotAllowedError') {
@@ -157,6 +175,10 @@ export class HtmlAudioBackend implements PlaybackBackend {
     this.audio.load()
     for (const filter of this.filters) filter.disconnect()
     this.filters = []
+    this.bassFilter?.disconnect()
+    this.bassFilter = null
+    this.boostGain?.disconnect()
+    this.boostGain = null
     void this.context?.close().catch(() => undefined)
     this.context = null
   }
@@ -180,9 +202,48 @@ export class HtmlAudioBackend implements PlaybackBackend {
         previous = filter
         return filter
       })
+
+      // Dedicated low shelf for the "extra bass" slider, independent of the
+      // graphic EQ bands.
+      const bass = context.createBiquadFilter()
+      bass.type = 'lowshelf'
+      bass.frequency.value = 80
+      bass.gain.value = 0
+      previous.connect(bass)
+      previous = bass
+
+      // Output boost, then a soft limiter so a 2-3x boost clips gracefully
+      // instead of producing hard digital distortion.
+      const boost = context.createGain()
+      boost.gain.value = 1
+      previous.connect(boost)
+      previous = boost
+
+      const limiter = context.createDynamicsCompressor()
+      limiter.threshold.value = -1.5
+      limiter.knee.value = 0
+      limiter.ratio.value = 20
+      limiter.attack.value = 0.003
+      limiter.release.value = 0.25
+      previous.connect(limiter)
+      previous = limiter
+
       previous.connect(context.destination)
+
+      this.bassFilter = bass
+      this.boostGain = boost
       this.context = context
       this.writeGains()
+
+      // Chromium can suspend an idle context (for example after a long pause).
+      // Resume automatically while the element is actually playing, otherwise
+      // the audio would stay silent after unpausing.
+      context.addEventListener('statechange', () => {
+        if (!this.disposed && this.audio.paused === false && context.state === 'suspended') {
+          void context.resume().catch(() => undefined)
+        }
+      })
+
       if (context.state === 'suspended') await context.resume().catch(() => undefined)
     } catch (error) {
       // A failed graph must never break playback: the element keeps its direct
@@ -198,6 +259,9 @@ export class HtmlAudioBackend implements PlaybackBackend {
     this.filters.forEach((filter, index) => {
       filter.gain.value = target[index] ?? 0
     })
+    if (this.bassFilter) this.bassFilter.gain.value = this.equalizer.bassBoost
+    // Linear boost from 1x to 3x; the limiter keeps peaks in range.
+    if (this.boostGain) this.boostGain.gain.value = this.equalizer.boost
   }
 
   private emit(event: PlaybackBackendEvent): void {

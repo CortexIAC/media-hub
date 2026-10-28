@@ -49,6 +49,7 @@ No GPL, LGPL or AGPL code is present in the shipped bundle.
 | Internet Archive | `advancedsearch.php` read API | no | IA developer APIs; per-item rights apply |
 | LibriVox | IA collection `librivoxaudio` | no | Public-domain recordings |
 | YouTube | Data API v3 `search.list` | yes, user-supplied | YouTube API Services Terms + Developer Policies; search-only, links out |
+| LRCLIB | `/api/get`, `/api/search` | no | Free, open lyrics service ([lrclib.net](https://lrclib.net)); only title/artist/album/duration are sent |
 
 No audio or text content is downloaded, cached or redistributed by the app. Results open in the user's browser.
 

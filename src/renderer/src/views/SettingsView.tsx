@@ -1,5 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react'
 import {
+  BASS_BOOST_MAX,
+  BOOST_MAX,
   EQ_BAND_LABELS,
   EQ_FREQUENCIES,
   EQ_MAX_DB,
@@ -8,6 +10,7 @@ import {
   SUPPORTED_AUDIO_EXTENSIONS,
   UNSUPPORTED_AUDIO_EXTENSIONS,
   equalizerIsFlat,
+  equalizerNeedsGraph,
   type RepeatMode
 } from '@core/models'
 import { ACCENT_PRESETS } from '../theme/theme'
@@ -126,7 +129,9 @@ export function SettingsView(): ReactElement {
                   type="button"
                   key={preset.id}
                   className={`btn btn-sm ${active ? 'btn-primary' : ''}`}
-                  onClick={() => player.setEqualizer({ enabled: true, bands: [...preset.bands] })}
+                  onClick={() =>
+                    player.setEqualizer({ ...equalizer, enabled: true, bands: [...preset.bands] })
+                  }
                   aria-pressed={active}
                 >
                   {preset.name}
@@ -136,7 +141,7 @@ export function SettingsView(): ReactElement {
             <button
               type="button"
               className="btn btn-sm btn-ghost"
-              onClick={() => player.setEqualizer({ ...equalizer, bands: [0, 0, 0, 0, 0] })}
+              onClick={() => player.setEqualizer({ ...equalizer, bands: [0, 0, 0, 0, 0], bassBoost: 0, boost: 1 })}
               disabled={equalizerIsFlat(equalizer)}
             >
               Reset
@@ -161,7 +166,7 @@ export function SettingsView(): ReactElement {
                     onChange={(event) => {
                       const bands = [...equalizer.bands]
                       bands[index] = Number(event.target.value)
-                      player.setEqualizer({ enabled: true, bands })
+                      player.setEqualizer({ ...equalizer, enabled: true, bands })
                     }}
                   />
                   <span className="eq-band-label">{EQ_BAND_LABELS[index]}</span>
@@ -170,10 +175,58 @@ export function SettingsView(): ReactElement {
               )
             })}
           </div>
+          <div className="settings-row">
+            <span className="settings-label">
+              Extra bass
+              <span>Low shelf at 80 Hz, works with the EQ off</span>
+            </span>
+            <div className="row" style={{ minWidth: 200 }}>
+              <input
+                type="range"
+                className="rail"
+                min={0}
+                max={BASS_BOOST_MAX}
+                step={0.5}
+                value={equalizer.bassBoost}
+                aria-label="Extra bass boost"
+                style={{ ['--fill' as string]: `${(equalizer.bassBoost / BASS_BOOST_MAX) * 100}%` } as CSSProperties}
+                onChange={(event) =>
+                  player.setEqualizer({ ...equalizer, bassBoost: Number(event.target.value) })
+                }
+              />
+              <span className="settings-value">+{equalizer.bassBoost} dB</span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <span className="settings-label">
+              Audio boost
+              <span>Output gain above 100%, limited to prevent clipping</span>
+            </span>
+            <div className="row" style={{ minWidth: 200 }}>
+              <input
+                type="range"
+                className="rail"
+                min={100}
+                max={Math.round(BOOST_MAX * 100)}
+                step={5}
+                value={Math.round(equalizer.boost * 100)}
+                aria-label="Audio boost"
+                style={{
+                  ['--fill' as string]: `${((equalizer.boost * 100 - 100) / (BOOST_MAX * 100 - 100)) * 100}%`
+                } as CSSProperties}
+                onChange={(event) =>
+                  player.setEqualizer({ ...equalizer, boost: Number(event.target.value) / 100 })
+                }
+              />
+              <span className="settings-value">{Math.round(equalizer.boost * 100)}%</span>
+            </div>
+          </div>
+
           <p className="faint" style={{ fontSize: 11.5, margin: 0, lineHeight: 1.6 }}>
-            {equalizer.enabled
-              ? 'Active — the curve is applied to the current and future tracks.'
-              : 'Off — audio goes straight to the output device with no filtering.'}
+            {equalizerNeedsGraph(equalizer)
+              ? `Processing active — EQ ${equalizer.enabled ? 'on' : 'off'}, bass +${equalizer.bassBoost} dB, boost ${Math.round(equalizer.boost * 100)}%.`
+              : 'Bypassed — audio goes straight to the output device with no filtering.'}
           </p>
         </section>
 

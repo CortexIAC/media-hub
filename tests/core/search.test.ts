@@ -31,6 +31,8 @@ function makeTrack(overrides: Partial<Track> & { id: string }): Track {
     channels: 2,
     lossless: false,
     artworkId: null,
+    lyrics: null,
+    lyricsSource: null,
     fileSize: 100,
     mtimeMs: 0,
     addedAt: 0,

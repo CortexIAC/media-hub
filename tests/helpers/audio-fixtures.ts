@@ -97,6 +97,7 @@ export interface Mp3Options {
   bitrateKbps?: number
   tags?: WavTags
   coverPng?: Buffer
+  lyrics?: string
 }
 
 export function makeMp3(options: Mp3Options = {}): Buffer {
@@ -122,7 +123,7 @@ export function makeMp3(options: Mp3Options = {}): Buffer {
   const tail = encoder.flush()
   if (tail.length > 0) parts.push(Buffer.from(tail))
 
-  return Buffer.concat([buildId3(options.tags, options.coverPng), ...parts])
+  return Buffer.concat([buildId3(options.tags, options.coverPng, options.lyrics), ...parts])
 }
 
 export interface FlacOptions {
@@ -261,7 +262,7 @@ function insertVorbisComments(native: Buffer, tags: WavTags): Buffer {
   ])
 }
 
-function buildId3(tags: WavTags | undefined, coverPng: Buffer | undefined): Buffer {
+function buildId3(tags: WavTags | undefined, coverPng: Buffer | undefined, lyrics: string | undefined): Buffer {
   const frames: Buffer[] = []
   if (tags?.title) frames.push(id3TextFrame('TIT2', tags.title))
   if (tags?.artist) frames.push(id3TextFrame('TPE1', tags.artist))
@@ -269,6 +270,20 @@ function buildId3(tags: WavTags | undefined, coverPng: Buffer | undefined): Buff
   if (tags?.track) frames.push(id3TextFrame('TRCK', tags.track))
   if (tags?.year) frames.push(id3TextFrame('TYER', tags.year))
   if (tags?.genre) frames.push(id3TextFrame('TCON', tags.genre))
+  if (lyrics) {
+    // USLT: encoding, language, content descriptor, then the text.
+    frames.push(
+      id3Frame(
+        'USLT',
+        Buffer.concat([
+          Buffer.from([0]),
+          Buffer.from('eng', 'latin1'),
+          Buffer.from('\0', 'latin1'),
+          Buffer.from(lyrics, 'latin1')
+        ])
+      )
+    )
+  }
   if (coverPng) {
     frames.push(
       id3Frame(
@@ -422,8 +437,15 @@ export async function createFixtureLibrary(existingRoot?: string): Promise<Fixtu
         durationSeconds: 12,
         frequency: 523,
         tags: { title: 'Cover Tone', artist: 'Bunny Test Ensemble', album: 'Artwork Sessions', year: '2021', track: '1', genre: 'Electronic' },
-        coverPng
+        coverPng,
+        lyrics: 'Embedded line one\nEmbedded line two'
       })
+    ),
+    // Sidecar lyrics next to the WAV, which is how most local libraries carry
+    // synced lyrics.
+    writeFile(
+      join(albumOne, '01 Opening Tone.lrc'),
+      '[ar:Bunny Test Ensemble]\n[ti:Opening Tone]\n[00:00.00]First light over the garden\n[00:03.50]Signals in the wire\n[00:06.25]Opening tone\n'
     ),
     writeFile(
       secondMp3,

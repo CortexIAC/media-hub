@@ -182,6 +182,8 @@ export async function readTrack(file: FoundFile, options: ReadTrackOptions): Pro
     channels: null,
     lossless: false,
     artworkId: null,
+    lyrics: null,
+    lyricsSource: null,
     fileSize: file.fileSize,
     mtimeMs: file.mtimeMs,
     addedAt: now,
@@ -198,6 +200,7 @@ export async function readTrack(file: FoundFile, options: ReadTrackOptions): Pro
     if (!title) issues.push('missing-metadata')
 
     const artworkId = await cacheArtwork(common.picture, options.artworkDir)
+    const lyrics = await readLyrics(file.path, common.lyrics)
     const durationMs = typeof format.duration === 'number' && Number.isFinite(format.duration) ? Math.round(format.duration * 1000) : 0
 
     return {
@@ -219,6 +222,8 @@ export async function readTrack(file: FoundFile, options: ReadTrackOptions): Pro
         channels: format.numberOfChannels ?? null,
         lossless: Boolean(format.lossless),
         artworkId,
+        lyrics: lyrics.lyrics,
+        lyricsSource: lyrics.lyricsSource,
         issues
       },
       failure: null
@@ -256,6 +261,45 @@ async function cacheArtwork(
     }
   }
   return artworkId
+}
+
+const MAX_LYRICS_BYTES = 64 * 1024
+
+/**
+ * Lyrics preference: a `.lrc` sidecar (usually synced), then an embedded tag,
+ * then a plain `.txt` sidecar. Never throws — a missing sidecar is normal.
+ */
+async function readLyrics(
+  audioPath: string,
+  embedded: ReadonlyArray<{ text?: string }> | undefined
+): Promise<{ lyrics: string | null; lyricsSource: 'embedded' | 'sidecar' | null }> {
+  const lrc = await readSmallText(replaceExtension(audioPath, '.lrc'))
+  if (lrc) return { lyrics: lrc, lyricsSource: 'sidecar' }
+
+  const tagged = embedded?.find((entry) => typeof entry.text === 'string' && entry.text.trim().length > 0)
+  if (tagged?.text) return { lyrics: tagged.text, lyricsSource: 'embedded' }
+
+  const plain = await readSmallText(replaceExtension(audioPath, '.txt'))
+  if (plain) return { lyrics: plain, lyricsSource: 'sidecar' }
+
+  return { lyrics: null, lyricsSource: null }
+}
+
+async function readSmallText(path: string): Promise<string | null> {
+  try {
+    const stat = await fs.stat(path)
+    if (!stat.isFile() || stat.size === 0 || stat.size > MAX_LYRICS_BYTES) return null
+    const text = await fs.readFile(path, 'utf8')
+    return text.trim().length > 0 ? text : null
+  } catch {
+    return null
+  }
+}
+
+function replaceExtension(filePath: string, extension: string): string {
+  const dot = filePath.lastIndexOf('.')
+  const separator = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+  return dot > separator ? `${filePath.slice(0, dot)}${extension}` : `${filePath}${extension}`
 }
 
 function mimeToExtension(mime: string | undefined): string | null {

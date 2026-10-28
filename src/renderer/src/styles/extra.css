@@ -324,3 +324,65 @@
     display: none;
   }
 }
+
+/* Lyrics ---------------------------------------------------------------- */
+
+.np-lyrics {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.np-lyrics-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.np-lyrics-head h3 {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.np-lyrics-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.lyrics-scroll {
+  max-height: 210px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+
+.lyric-line {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--text-muted);
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.lyrics-scroll.is-synced .lyric-line {
+  opacity: 0.62;
+}
+
+.lyrics-scroll.is-synced .lyric-line.is-active {
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyric-line {
+    transition: none;
+  }
+}

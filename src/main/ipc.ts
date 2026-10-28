@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { AppSettings, PlaybackSession, ScanProgress } from '@core/models'
 import { PROVIDER_CATALOG } from '@core/providers'
-import { IPC, type AppInfo, type ImportResult, type LibraryViewState, type ResolvedTrackSource, type VerifyResult } from '@shared/ipc'
+import { IPC, type AppInfo, type ImportResult, type LibraryViewState, type LyricsResult, type ResolvedTrackSource, type VerifyResult } from '@shared/ipc'
 import type { LibraryStore } from './storage/libraryStore'
 import type { PlaylistStore } from './storage/playlistStore'
 import type { SessionStore, SettingsStore } from './storage/sessionStore'
@@ -10,6 +10,7 @@ import type { DataPaths } from './storage/paths'
 import type { ScannerService } from './library/scannerService'
 import { trackUrl } from './mediaProtocol'
 import { searchCatalogues } from './providers'
+import { fetchLyrics } from './providers/lyrics'
 import type { DiscoveryKind } from '@core/discovery'
 
 export interface IpcContext {
@@ -32,6 +33,7 @@ export function buildLibraryState(context: IpcContext): LibraryViewState {
 
 export function registerIpc(context: IpcContext): void {
   const { library, playlists, settings, session, scanner, paths } = context
+  const lyricsCache = new Map<string, LyricsResult | null>()
 
   ipcMain.handle(IPC.libraryGet, () => buildLibraryState(context))
 
@@ -251,6 +253,42 @@ export function registerIpc(context: IpcContext): void {
       kinds: Array.isArray(kinds) ? kinds : undefined,
       youtubeApiKey: settings.value.youtubeApiKey
     })
+  })
+
+  ipcMain.handle(IPC.lyricsGet, async (_event, trackId: string): Promise<LyricsResult | null> => {
+    const track = library.getTrack(trackId)
+    if (!track) return null
+
+    if (track.lyrics && track.lyrics.trim().length > 0) {
+      return {
+        text: track.lyrics,
+        synced: /\[\d{1,3}:\d{1,2}/.test(track.lyrics),
+        source: 'local',
+        provider: track.lyricsSource === 'sidecar' ? 'Sidecar lyrics file' : 'Embedded lyrics tag',
+        providerUrl: null
+      }
+    }
+
+    if (lyricsCache.has(trackId)) return lyricsCache.get(trackId) ?? null
+    const online = await fetchLyrics({
+      trackName: track.title,
+      artistName: track.artist || track.albumArtist,
+      albumName: track.album,
+      durationMs: track.durationMs
+    })
+    const result: LyricsResult | null = online
+      ? {
+          text: online.text,
+          synced: online.synced,
+          source: 'lrclib',
+          provider: online.provider,
+          providerUrl: online.providerUrl
+        }
+      : null
+    // Cache misses too: repeated views of the same track should not re-request.
+    if (lyricsCache.size > 500) lyricsCache.clear()
+    lyricsCache.set(trackId, result)
+    return result
   })
 }
 

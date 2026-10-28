@@ -16,6 +16,18 @@ import { dataPaths } from './storage/paths'
  */
 export const MEDIA_SCHEME = 'bunny-media'
 
+/**
+ * Lets the renderer read samples from local media through Web Audio.
+ *
+ * Only this app's own scheme serves these responses, and the content is the
+ * user's own library, so the permissive origin is not a leak: the scheme is
+ * unreachable from any other page.
+ */
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges'
+}
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
@@ -43,6 +55,13 @@ export function registerMediaScheme(): void {
         standard: true,
         secure: true,
         supportFetchAPI: true,
+        // Web Audio refuses to read samples from cross-origin media: a
+        // MediaElementAudioSourceNode fed by an uncorsed resource outputs pure
+        // silence. The renderer page and this scheme are different origins, so
+        // the equalizer/boost graph would mute every track. CORS mode plus the
+        // Access-Control-Allow-Origin header below makes the resource
+        // CORS-same-origin, which keeps the graph audible.
+        corsEnabled: true,
         stream: true,
         bypassCSP: false
       }
@@ -122,7 +141,8 @@ async function streamPath(filePath: string, rangeHeader: string | null, label: s
         'Content-Length': '0',
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'no-store',
-        'X-Media-Id': label
+        'X-Media-Id': label,
+        ...CORS_HEADERS
       }
     })
   }
@@ -139,7 +159,8 @@ async function streamPath(filePath: string, rangeHeader: string | null, label: s
     'Content-Type': contentType,
     'Content-Length': String(length),
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'no-store'
+    'Cache-Control': 'no-store',
+    ...CORS_HEADERS
   }
   if (range) headers['Content-Range'] = `bytes ${start}-${end}/${size}`
 

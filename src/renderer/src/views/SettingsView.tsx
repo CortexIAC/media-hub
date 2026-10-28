@@ -233,14 +233,14 @@ export function SettingsView(): ReactElement {
         <section className="settings-card">
           <h2>Online catalogues</h2>
           <p className="faint" style={{ fontSize: 11.5, margin: 0, lineHeight: 1.6 }}>
-            Open Library, Project Gutenberg, LibriVox and the Internet Archive are searched without a key. YouTube search is
-            optional and read-only: results open in your browser, because YouTube&apos;s terms forbid extracting or playing audio
-            outside its own player.
+            Open Library, Project Gutenberg, LibriVox and the Internet Archive are searched without a key, and so is YouTube.
+            Videos always play in YouTube&apos;s own embedded player, since its terms forbid extracting audio or playing it
+            outside that player. The key below is optional and only changes how search is performed.
           </p>
           <div className="settings-row" style={{ alignItems: 'flex-start' }}>
             <span className="settings-label">
               YouTube Data API key
-              <span>Optional · search only</span>
+              <span>Optional · search works without one</span>
             </span>
             <div className="row" style={{ minWidth: 240, flexWrap: 'wrap' }}>
               <input

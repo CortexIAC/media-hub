@@ -13,7 +13,7 @@ import {
   searchLibrivox,
   searchOpenLibrary
 } from './catalogues'
-import { searchYouTube } from './youtube'
+import { searchYouTubeVideos } from './youtube'
 
 /**
  * Fan-out search across the public catalogues.
@@ -67,7 +67,28 @@ export async function searchCatalogues(rawQuery: string, options: DiscoverOption
   }
   if (wants('video') || wants('music')) {
     const key = options.youtubeApiKey?.trim()
-    if (key) tasks.push({ source: 'youtube', run: () => searchYouTube(query, key, limit, options.signal) })
+    if (key) {
+      tasks.push({
+        source: 'youtube',
+        run: async () => {
+          const videos = await searchYouTubeVideos(query, key, limit, options.signal)
+          return videos.map<DiscoveryResult>((video) => ({
+            id: video.id,
+            source: 'youtube',
+            kind: 'video',
+            title: video.title,
+            creator: video.channel,
+            year: null,
+            description: null,
+            detailUrl: video.url,
+            accessUrl: null,
+            accessKind: 'external',
+            accessLabel: 'Open in Video',
+            rights: 'Playback only inside YouTube’s own player'
+          }))
+        }
+      })
+    }
   }
 
   const settled = await Promise.allSettled(tasks.map((task) => task.run()))

@@ -25,6 +25,10 @@ export class HtmlAudioBackend implements PlaybackBackend {
   constructor() {
     this.audio = new Audio()
     this.audio.preload = 'auto'
+    // CORS mode is what lets Web Audio read the decoded samples. Without it the
+    // equalizer graph receives silence from a cross-origin resource, even though
+    // the element itself plays and its clock advances.
+    this.audio.crossOrigin = 'anonymous'
     this.audio.addEventListener('loadedmetadata', () => {
       this.durationMs = normaliseDuration(this.audio.duration)
       this.emit({ type: 'loaded', durationMs: this.durationMs })

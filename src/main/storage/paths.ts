@@ -15,7 +15,8 @@ export function dataPaths(userDataDir: string) {
     library: join(userDataDir, 'library.json'),
     playlists: join(userDataDir, 'playlists.json'),
     settings: join(userDataDir, 'settings.json'),
-    session: join(userDataDir, 'session.json')
+    session: join(userDataDir, 'session.json'),
+    youtube: join(userDataDir, 'youtube.json')
   }
 }
 

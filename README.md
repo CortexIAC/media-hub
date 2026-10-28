@@ -28,12 +28,13 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Equalizer**: five bands (60 Hz – 14 kHz), presets, an independent **extra-bass** slider (80 Hz low shelf) and an **audio boost** slider up to 300% with a soft limiter — all persisted and applied inside the player.
 - **Lyrics**: embedded tags, `.lrc`/`.txt` sidecar files, and an LRCLIB lookup as a fallback, with synced lines following the playhead in Now Playing.
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
-- **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive. Optional YouTube Data API search.
+- **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive.
+- **YouTube**: search with no key at all, then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. A Data API key is optional and only changes the search path.
 - **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
 
 ## What is planned, not built
 
-Video playback, Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
+Video from anywhere other than YouTube, Spotify / Apple Music libraries, Bunny Sync and multi-device playback, in-app browser tabs, downloads, accounts. The provider layer records exactly what each service allows in [docs/PROVIDER-FEASIBILITY.md](docs/PROVIDER-FEASIBILITY.md); nothing here pretends those features exist.
 
 ## Commands
 
@@ -42,10 +43,11 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 109 unit tests (vitest)
+npm test             # 115 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects
+node scripts/check-youtube.mjs   # live YouTube search → real playback check (needs a build)
 ```
 
 End-to-end tests drive the real Electron app with Playwright, import a generated fixture library, play MP3/WAV/FLAC audio, restart the app and verify persistence. Screenshots are written to `screenshots/`.
@@ -71,7 +73,7 @@ Settings → Library → **Open data folder** takes you there.
 ## Online catalogues and the law
 
 - Open Library, Project Gutenberg, LibriVox and the Internet Archive are queried through their public read APIs, with a descriptive User-Agent, bounded timeouts and no retries in a loop.
-- YouTube search is optional and needs your own Data API v3 key. Results open on youtube.com: YouTube's developer policies forbid extracting audio, hiding the player, or background playback, so this app does not do any of that.
+- YouTube search needs no key: it uses the same public search request YouTube's own web player makes, and falls back to the documented Data API v3 when you add a key. Playback always happens in the official embedded player, visible on the Video screen, because YouTube's developer policies forbid extracting audio, hiding the player, or background playback. No stream URL is ever resolved.
 - Lyrics come from your files first. When neither a tag nor a sidecar file exists, the app asks [LRCLIB](https://lrclib.net), a free open lyrics service; only the track title, artist, album and duration are sent.
 - Copyrighted books (for example Margaret Peterson Haddix's *The Missing* series) are **not** downloadable here. Open Library links to legal borrowing; your local library's Libby/OverDrive catalogue is the usual free route.
 
@@ -88,6 +90,7 @@ docs/            architecture, testing, dependencies, provider feasibility, spri
 
 ## More documentation
 
+- [YouTube search and playback](docs/YOUTUBE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing and manual playback verification](docs/TESTING.md)
 - [Dependency and licence inventory](docs/DEPENDENCIES.md)

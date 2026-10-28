@@ -9,15 +9,17 @@ npm run typecheck    # tsc -p tsconfig.node.json && tsc -p tsconfig.web.json
 npm test             # vitest run, unit + integration (no Electron)
 npm run test:e2e     # npm run build, then vitest with vitest.e2e.config.ts
 npm run bench        # cold start and 300-track import measurement
+node scripts/check-youtube.mjs   # live YouTube search → embedded playback check
 ```
 
 ## Automated results
 
 ```
-Unit + integration:  8 files, 109 tests, all passing (~28 s)
-End-to-end:          1 file, 9 tests, all passing (~36 s)
+Unit + integration:  9 files, 115 tests, all passing (~32 s)
+End-to-end:          1 file, 9 tests, all passing (~38 s)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
+Live YouTube check:  search → select → player reaches "playing" (no API key configured)
 ```
 
 Coverage by area:
@@ -29,10 +31,11 @@ Coverage by area:
 | Local search | `tests/core/search.test.ts` | case/diacritic normalisation, relevance ordering, limits, album grouping |
 | Discovery helpers | `tests/core/discovery.test.ts` | query normalisation/bounding, dedupe by source+id, kind filtering, source metadata |
 | Lyrics parsing | `tests/core/lyrics.test.ts` | plain and LRC text, metadata tags, multiple timestamps per line, hundredths vs milliseconds, ordering, active-line lookup |
+| YouTube search parsing | `tests/core/youtube.test.ts` | id/title/channel/duration mapping from a real-shaped payload, `simpleText` and run titles, `compactVideoRenderer`, hour-long durations, malformed/id-less entries skipped, duplicates removed, playlist/channel renderers ignored, HTML entity decoding, `2:26`/`LIVE` length parsing |
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
-| Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, lyrics in Now Playing, equalizer + bass/boost, AudioContext resume after suspension, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
+| Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, lyrics in Now Playing, equalizer + bass/boost, measured audio at the output node (peak > 0 with the EQ on), AudioContext resume after suspension, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
 
 Fixtures are generated at test time — WAV built sample by sample, MP3 encoded with lamejs, FLAC encoded with libflac — so no binary audio is committed and the tests exercise real decoders. The e2e suite stubs only the native folder picker; everything after that is the real app.
 
@@ -40,6 +43,8 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 
 - The e2e playback assertion failed once in four consecutive full runs (a 20 s timeout waiting for the clock to move on the first test after a fresh build) and passed on re-run and in every other run. It is a timing flake in the harness, not a playback regression; the same file passed immediately after.
 - Catalogue search tests never assert live network results. Network failures are covered by unit-level error paths and by showing `errors[]` in the UI; live checks are manual (below).
+- YouTube search and playback are checked by `scripts/check-youtube.mjs`, not by the e2e suite, because they need live network and a third-party player. It fails loudly (non-zero exit) if search returns nothing or the player never reaches `playing`.
+- The equalizer test measures samples at the node that feeds the speakers. It was added after a real defect: Web Audio outputs silence for cross-origin media, so an uncorsed `bunny-media://` scheme muted every track whenever any processing (EQ, bass or boost) was enabled while the clock kept advancing.
 
 ## Supported audio formats (tested)
 
@@ -68,6 +73,8 @@ Performed on the built app (`npm run build && npm start`) with a generated libra
 9. Restarted the app: library, favorites, playlist, accent, equalizer curve, bass/boost and paused track position restored.
 10. Killed the app while scanning: no partial/corrupt JSON; next start showed the previously scanned tracks.
 11. Removed a file from disk and pressed "Verify files": counted as missing, library otherwise intact.
+12. Played `Music/dom/Lil Noonie x Lil Sy - Mari Glock (Official Music Video).mp3` (MPEG-1 Layer III, 64 kbps mono, 2:25) from the real library with the equalizer enabled: audible at the expected level, position advancing. This is the file that reported silence; the cause was the cross-origin Web Audio path described above, not the file — bitrate index, sample rate and stream length all read correctly, and the same file played fine with the EQ bypassed.
+13. Video screen: keyless search for "mari glock lil noonie" returned 17 real results, the top result played in the embedded player and reached the `playing` state.
 
 ## Performance measurement
 

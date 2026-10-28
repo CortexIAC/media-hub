@@ -8,7 +8,9 @@ import { registerMediaProtocol, registerMediaScheme, isInternalUrl } from './med
 import { LibraryStore } from './storage/libraryStore'
 import { PlaylistStore } from './storage/playlistStore'
 import { SessionStore, SettingsStore } from './storage/sessionStore'
+import { YouTubeStore } from './storage/youtubeStore'
 import { dataPaths, type DataPaths } from './storage/paths'
+import { startRendererServer, type RendererServer } from './rendererServer'
 
 app.setName('Bunny Media Hub')
 registerMediaScheme()
@@ -19,11 +21,13 @@ if (!gotLock) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let rendererServer: RendererServer | null = null
 let paths: DataPaths
 let library: LibraryStore
 let playlists: PlaylistStore
 let settings: SettingsStore
 let session: SessionStore
+let youtube: YouTubeStore
 let scanner: ScannerService
 let scheduledScan: NodeJS.Timeout | null = null
 let quitting = false
@@ -36,6 +40,7 @@ const context: IpcContext = {
   playlists: undefined as unknown as PlaylistStore,
   settings: undefined as unknown as SettingsStore,
   session: undefined as unknown as SessionStore,
+  youtube: undefined as unknown as YouTubeStore,
   scanner: undefined as unknown as ScannerService,
   paths: undefined as unknown as DataPaths,
   getProgress: () => currentProgress,
@@ -57,6 +62,8 @@ if (gotLock) {
   })
 
   app.on('window-all-closed', () => {
+    void rendererServer?.close()
+    rendererServer = null
     app.quit()
   })
 
@@ -74,7 +81,8 @@ if (gotLock) {
       library?.flush() ?? Promise.resolve(),
       playlists?.flush() ?? Promise.resolve(),
       settings?.flush() ?? Promise.resolve(),
-      session?.flush() ?? Promise.resolve()
+      session?.flush() ?? Promise.resolve(),
+      youtube?.flush() ?? Promise.resolve()
     ]).finally(() => app.quit())
   })
 }
@@ -87,8 +95,9 @@ async function bootstrap(): Promise<void> {
   playlists = new PlaylistStore(paths.playlists)
   settings = new SettingsStore(paths.settings)
   session = new SessionStore(paths.session)
+  youtube = new YouTubeStore(paths.youtube)
 
-  await Promise.all([library.load(), playlists.load(), settings.load(), session.load()])
+  await Promise.all([library.load(), playlists.load(), settings.load(), session.load(), youtube.load()])
 
   scanner = new ScannerService({
     workerPath: join(__dirname, 'scannerWorker.js'),
@@ -112,6 +121,7 @@ async function bootstrap(): Promise<void> {
     playlists,
     settings,
     session,
+    youtube,
     scanner,
     paths,
     scanFolder,
@@ -123,6 +133,13 @@ async function bootstrap(): Promise<void> {
 
   registerMediaProtocol(library, paths.root)
   registerIpc(context)
+
+  // Production loads the built renderer over loopback HTTP so it has an origin
+  // and Referer for the official YouTube embed; development uses Vite.
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    rendererServer = await startRendererServer(join(__dirname, '../renderer'))
+  }
+
   applySecurityPolicy()
   createWindow()
 
@@ -185,6 +202,8 @@ function createWindow(): void {
   const devUrl = process.env.ELECTRON_RENDERER_URL
   if (devUrl) {
     void window.loadURL(devUrl)
+  } else if (rendererServer) {
+    void window.loadURL(`${rendererServer.origin}/index.html`)
   } else {
     void window.loadFile(join(__dirname, '../renderer/index.html'))
   }
@@ -200,18 +219,36 @@ function applySecurityPolicy(): void {
 
   const policy = [
     "default-src 'self'",
-    "script-src 'self'",
+    // The YouTube IFrame Player API script is loaded from youtube.com; nothing
+    // else may execute.
+    "script-src 'self' https://www.youtube.com https://s.ytimg.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' bunny-media: data: blob:",
+    "img-src 'self' bunny-media: data: blob: https://i.ytimg.com https://img.youtube.com",
     "media-src 'self' bunny-media: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' https://www.youtube.com https://www.googleapis.com",
     "object-src 'none'",
     "base-uri 'none'",
-    "frame-src 'self'"
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com"
   ].join('; ')
 
+  const devUrl = process.env.ELECTRON_RENDERER_URL
+
   electronSession.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // Only the app's own document gets the policy. Applying it to every response
+    // would also rewrite YouTube's iframe document (the embedded player), whose
+    // inline bootstrap scripts the policy is designed to block for us.
+    const isAppDocument =
+      details.resourceType === 'mainFrame' &&
+      (details.url.startsWith('file://') ||
+        (devUrl ? details.url.startsWith(devUrl) : false) ||
+        (rendererServer ? details.url.startsWith(rendererServer.origin) : false))
+
+    if (!isAppDocument) {
+      callback({ responseHeaders: details.responseHeaders })
+      return
+    }
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,

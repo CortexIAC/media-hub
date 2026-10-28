@@ -48,10 +48,10 @@ No GPL, LGPL or AGPL code is present in the shipped bundle.
 | Project Gutenberg | Gutendex (`gutendex.com`) | no | Gutendex is a community mirror of Gutenberg metadata |
 | Internet Archive | `advancedsearch.php` read API | no | IA developer APIs; per-item rights apply |
 | LibriVox | IA collection `librivoxaudio` | no | Public-domain recordings |
-| YouTube | Data API v3 `search.list` | yes, user-supplied | YouTube API Services Terms + Developer Policies; search-only, links out |
+| YouTube | keyless `/youtubei/v1/search` (the request YouTube's own web player sends) plus optional Data API v3 `search.list` / `videos.list`; oEmbed for pasted links | no (key optional) | YouTube API Services Terms + Developer Policies. Playback only inside the official embedded IFrame player; no stream extraction, no background playback. The keyless search endpoint is undocumented and can change without notice — a key is the supported fallback |
 | LRCLIB | `/api/get`, `/api/search` | no | Free, open lyrics service ([lrclib.net](https://lrclib.net)); only title/artist/album/duration are sent |
 
-No audio or text content is downloaded, cached or redistributed by the app. Results open in the user's browser.
+No audio or text content is downloaded, cached or redistributed by the app. Catalogue results open in the user's browser; YouTube results play in YouTube's embedded player, which serves its own media.
 
 ## Updating this document
 

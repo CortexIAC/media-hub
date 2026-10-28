@@ -59,6 +59,13 @@ const api: BunnyApi = {
   },
   lyrics: {
     get: (trackId) => ipcRenderer.invoke(IPC.lyricsGet, trackId)
+  },
+  youtube: {
+    search: (query) => ipcRenderer.invoke(IPC.youtubeSearch, query),
+    resolve: (input) => ipcRenderer.invoke(IPC.youtubeResolve, input),
+    state: () => ipcRenderer.invoke(IPC.youtubeState),
+    toggleFavorite: (video) => ipcRenderer.invoke(IPC.youtubeToggleFavorite, video),
+    addHistory: (video) => ipcRenderer.invoke(IPC.youtubeHistoryAdd, video)
   }
 }
 

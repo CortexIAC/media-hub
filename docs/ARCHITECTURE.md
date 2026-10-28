@@ -75,7 +75,9 @@ Four JSON stores (`JsonFile`) with atomic temp-file writes, corrupt-file quarant
 
 `src/main/providers/` performs all network I/O in the main process. Each source has a bounded timeout (5.5–9 s), a descriptive User-Agent, and no retry loop. `searchCatalogues` fans out with `Promise.allSettled`, so one failing service never blanks the results: failures come back as `errors[]` and are shown in the UI.
 
-YouTube is search-only and only runs when the user supplies a Data API key; results are links to youtube.com. That is a deliberate policy decision, documented in [PROVIDER-FEASIBILITY.md](PROVIDER-FEASIBILITY.md).
+YouTube has two search paths in `providers/youtube.ts`: the documented Data API v3 when the user supplies a key, and otherwise the same public `/youtubei/v1/search` request YouTube's own web player sends (no key, no account). A failing key falls back to the keyless path instead of blanking the results. Search payloads are parsed by the pure `core/youtube.ts` parser, so the shaping logic is unit-tested without a network call.
+
+Playback never leaves YouTube's own player: `components/YouTubePlayer` embeds the IFrame API, and the app only calls documented player methods (`playVideo`, `pauseVideo`, `seekTo`, `setVolume`). No stream URL is requested or produced — that is a deliberate policy decision, documented in [PROVIDER-FEASIBILITY.md](PROVIDER-FEASIBILITY.md) and [YOUTUBE.md](YOUTUBE.md).
 
 ### Application shell
 
@@ -88,7 +90,9 @@ YouTube is search-only and only runs when the user supplies a Data API key; resu
 
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`.
 - Preload exposes a narrow typed API (`window.bunny`); no ipcRenderer passthrough.
-- CSP locks scripts to `'self'`, media to `bunny-media:`/`blob:`, and frames to `'self'`.
+- CSP locks scripts to `'self'` plus the YouTube IFrame API, media to `bunny-media:`/`blob:`, and frames to the YouTube embed domains. The policy is applied only to the app document, never to the embedded player's own document.
+- In production the built renderer is served from a loopback HTTP origin (`main/rendererServer.ts`, bound to 127.0.0.1 on a random port). A `file://` page has no origin or referrer, which the YouTube embed rejects; loopback keeps `contextIsolation`/`sandbox` unchanged and is unreachable from other machines.
+- The `bunny-media:` scheme sends `Access-Control-Allow-Origin` and is registered with CORS enabled. Web Audio refuses to read samples from cross-origin media, so without CORS the equalizer/boost graph silently mutes every local track.
 - Permission requests (camera, microphone, notifications) are denied.
 - External navigation is blocked; only validated http(s) URLs are handed to `shell.openExternal`.
 - The renderer performs no network requests: catalogue search, media reads and file access all happen in the main process.
@@ -99,7 +103,7 @@ These exist as interfaces or documentation, never as fake implementations:
 
 - `sync.ts` defines device identity, timeline and clock-sync shapes; no transport is implemented.
 - `providers.ts` describes Spotify, Apple Music, YouTube and Cinejoy capability by capability; only the catalogue sources listed above are wired up.
-- Video, in-app browsing and downloads are not implemented.
+- Non-YouTube video, in-app browsing and downloads are not implemented. YouTube queue and history live in `storage/youtubeStore.ts`; YouTube playlists do not exist yet (the playlist store is track-id based).
 
 ## Known performance characteristics
 

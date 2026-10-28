@@ -13,10 +13,12 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 - Five-band Web Audio equalizer with presets, an independent extra-bass low shelf, and an output boost up to 300% behind a soft limiter; all persisted and verified to keep playback running.
 - Lyrics from embedded tags, `.lrc`/`.txt` sidecars and LRCLIB, with synced-line highlighting in Now Playing.
 - Fixed a silent-after-unpause bug: Chromium can suspend an idle AudioContext, which silences the element; the player now always resumes the graph before playback and on `statechange`.
+- Fixed the real cause of "playing but no sound" with the equalizer on: Web Audio outputs silence for cross-origin media, and `bunny-media://` was cross-origin to the renderer, so any EQ/bass/boost setting muted every track while the clock advanced. The scheme is now CORS-enabled with `Access-Control-Allow-Origin`, the element loads with `crossOrigin='anonymous'`, and the e2e suite measures samples at the output node.
+- YouTube pipeline: keyless search (no key, no account), optional Data API path with fallback, real embedded playback of the selected video, queue/next/previous, saved videos and recent history. The renderer is served from a loopback HTTP origin so the embed has a valid origin and referrer.
 - Queue add/remove/jump, playlists (create, rename, add, remove, reorder, delete), favorites.
 - Persistence of library, playlists, favorites, settings, equalizer and the last session across restarts.
 - Robust handling of missing files, unreadable folders, corrupt and empty files, and recognised-but-unsupported extensions.
-- Virtual Library: Open Library, Project Gutenberg (+ Internet Archive mirror fallback), LibriVox, Internet Archive search; optional YouTube Data API search; results open in the browser.
+- Virtual Library: Open Library, Project Gutenberg (+ Internet Archive mirror fallback), LibriVox, Internet Archive search; catalogue results open in the browser.
 - Online results also appear in global search, so artists outside the local library are no longer "not found".
 - One-click Windows launcher (`launch.cmd`).
 
@@ -24,7 +26,7 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 
 - Search across public catalogues depends on third-party APIs; failures are displayed, never hidden.
 - Equalizer has no per-track presets and no visual spectrum analyser.
-- YouTube is search-only by design (policy), not playback.
+- YouTube: search, embedded playback, queue, saved videos and recent history work; YouTube playlists and a persistent YouTube queue do not exist yet. See [YOUTUBE.md](YOUTUBE.md).
 - M4A/AAC/OGG/Opus/WebM are scanned but not playback-verified (no fixtures available).
 
 ### Planned, not implemented
@@ -40,16 +42,17 @@ Layers are separated as required: application (renderer views/state/theme), core
 ```bash
 npm install
 npm run typecheck        # clean
-npm test                 # 97 tests / 7 files, pass
+npm test                 # 115 tests / 9 files, pass
 npm run build            # clean production build
 npm run test:e2e         # 9 tests, pass, screenshots written
 npm run bench            # startup + 300-track import numbers
 node scripts/check-discovery.mjs   # live catalogue smoke test
+node scripts/check-youtube.mjs     # live YouTube search → embedded playback
 ```
 
 ## 4. Automated test results
 
-- Unit/integration: **109 passed** (queue, player controller, search, discovery helpers, lyrics parsing, scanner, persistence, byte ranges).
+- Unit/integration: **115 passed** (queue, player controller, search, discovery helpers, lyrics parsing, YouTube search parsing, scanner, persistence, byte ranges).
 - End-to-end: **9 passed** (launch, import, MP3 playback/transport, FLAC playback, lyrics, equalizer + bass/boost + AudioContext resume, Virtual Library, queue/favorites/playlists/search/settings, restart persistence, clean shutdown).
 - One transient e2e timeout occurred once in four full runs; it passed on immediate re-run. Documented in [TESTING.md](TESTING.md).
 
@@ -63,7 +66,7 @@ Real audio was audible for MP3, WAV and FLAC; seek, volume, next/previous and se
 
 ## 7. Screenshots
 
-`screenshots/01`–`13`: empty state, music library, album, now playing, queue, playlist, search, library, streams, settings, restored library, equalizer, virtual library.
+`screenshots/01`–`14`: empty state, music library, album, now playing, queue, playlist, search, library, streams, settings, restored library, equalizer, virtual library, and YouTube search + embedded playback.
 
 ## 8. Performance
 
@@ -74,7 +77,8 @@ Cold start ≈ 0.65–0.70 s. 300-track import ≈ 1.0–1.4 s (3–5 ms/track) 
 1. Final library commit is a single React update; it will become noticeable on very large libraries (planned: `startTransition`, incremental derivation).
 2. Album grouping is by album + album-artist, so compilations can split into multiple album entries.
 3. Gutendex is unreachable from this network; the Gutenberg source falls back to the Internet Archive mirror.
-4. No in-app browser: catalogue and YouTube results open in the system browser.
+4. No in-app browser: catalogue results open in the system browser. YouTube now plays in the embedded player instead. YouTube playlists and a queue that survives restarts are not implemented.
+4b. The keyless YouTube search endpoint is undocumented and may change; a Data API key is the supported fallback.
 5. Equalizer and boost are global (not per device or per track) and there is no analyser; aggressive boost settings can still sound loud even with the limiter.
 6. Lyrics depend on LRCLIB coverage for tracks without local lyrics; instrumental detection comes from LRCLIB metadata only.
 7. E2E playback assertions are timing-sensitive on a fresh build (two flakes observed across runs, both passing on re-run).
@@ -97,6 +101,6 @@ The working tree is committed at the end of the sprint; see `git log --oneline` 
 ## 12. Notes on the extra requests
 
 - **Equalizer**: implemented with Web Audio biquad filters, persisted, verified with real playback.
-- **"Mari Glock" not appearing**: the app previously searched only local files. Global search now also queries the online catalogues; copyrighted commercial music still requires Spotify/Apple Music authorisation (Premium) or a YouTube key for search results, because no legal free catalogue offers full-track streaming.
+- **"Mari Glock" not appearing**: the app previously searched only local files. Global search now also queries the online catalogues, and the Video screen searches YouTube without any key. Copyrighted commercial music still cannot be streamed as audio by any legal free catalogue; YouTube play happens in YouTube's own player.
 - **Cinejoy**: no public API or developer programme found for cinejoy.pk, so nothing is integrated; adding it needs a partner agreement.
 - **Books**: the Virtual Library covers public-domain catalogues. *The Missing* (Margaret Peterson Haddix) is in copyright — Open Library links to legal borrowing, and a local library card via Libby/OverDrive is the free route.

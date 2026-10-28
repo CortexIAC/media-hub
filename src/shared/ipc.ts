@@ -13,6 +13,7 @@ import type {
   Track
 } from '@core/models'
 import type { DiscoveryKind, DiscoveryResponse } from '@core/discovery'
+import type { YouTubeVideo } from '@core/youtube'
 import type { ProviderDescriptor } from '@core/providers'
 
 export const IPC = {
@@ -51,7 +52,13 @@ export const IPC = {
   windowIsMaximized: 'window:is-maximized',
   providersList: 'providers:list',
   discoverySearch: 'discovery:search',
-  lyricsGet: 'lyrics:get'
+  lyricsGet: 'lyrics:get',
+
+  youtubeSearch: 'youtube:search',
+  youtubeResolve: 'youtube:resolve',
+  youtubeState: 'youtube:state',
+  youtubeToggleFavorite: 'youtube:toggle-favorite',
+  youtubeHistoryAdd: 'youtube:history-add'
 } as const
 
 export interface ImportResult {
@@ -89,6 +96,26 @@ export interface PlaylistState {
 
 export interface LibraryViewState extends LibrarySnapshot {
   scanning: ScanProgress | null
+}
+
+export interface YouTubeSearchResult {
+  videos: YouTubeVideo[]
+  /** Kept for older callers; search no longer requires a key. */
+  needsKey: boolean
+  error: string | null
+  /** Which path answered: the user's Data API key, or keyless web search. */
+  source?: 'api' | 'web' | null
+  warning?: string | null
+}
+
+export interface YouTubeResolveResult {
+  video: YouTubeVideo | null
+  error: string | null
+}
+
+export interface YouTubeLibraryView {
+  favorites: YouTubeVideo[]
+  history: YouTubeVideo[]
 }
 
 export interface LyricsResult {
@@ -152,6 +179,13 @@ export interface BunnyApi {
   lyrics: {
     get(trackId: string): Promise<LyricsResult | null>
   }
+  youtube: {
+    search(query: string): Promise<YouTubeSearchResult>
+    resolve(input: string): Promise<YouTubeResolveResult>
+    state(): Promise<YouTubeLibraryView>
+    toggleFavorite(video: YouTubeVideo): Promise<YouTubeLibraryView>
+    addHistory(video: YouTubeVideo): Promise<YouTubeLibraryView>
+  }
 }
 
-export type { Track }
+export type { Track, YouTubeVideo }

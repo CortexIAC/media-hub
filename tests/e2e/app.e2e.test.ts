@@ -211,10 +211,16 @@ describe('Bunny Media Hub end-to-end', () => {
 
   it('applies an equalizer preset without interrupting playback', async () => {
     // Capture the AudioContext the player creates so the test can prove it is
-    // running, and can reproduce Chromium suspending it while paused.
+    // running, can reproduce Chromium suspending it while paused, and can
+    // measure whether samples actually reach the output.
     await page.evaluate(() => {
-      const holder = window as unknown as { __contexts?: AudioContext[]; AudioContext: typeof AudioContext }
+      const holder = window as unknown as {
+        __contexts?: AudioContext[]
+        __output?: { analyser: AnalyserNode }
+        AudioContext: typeof AudioContext
+      }
       holder.__contexts = []
+      holder.__output = undefined
       const Original = holder.AudioContext
       class Tracked extends Original {
         constructor(options?: AudioContextOptions) {
@@ -223,6 +229,28 @@ describe('Bunny Media Hub end-to-end', () => {
         }
       }
       holder.AudioContext = Tracked as unknown as typeof AudioContext
+
+      // Tap whatever the player connects to the speakers, so the test can prove
+      // audio is audible instead of merely that a graph exists.
+      const nativeConnect = AudioNode.prototype.connect
+      AudioNode.prototype.connect = function (this: AudioNode, destination: AudioNode, ...rest: unknown[]) {
+        if (destination === this.context.destination && !holder.__output) {
+          const analyser = this.context.createAnalyser()
+          analyser.fftSize = 2048
+          ;(nativeConnect as unknown as (this: AudioNode, node: AudioNode) => AudioNode).call(analyser, destination)
+          holder.__output = { analyser }
+          return (nativeConnect as unknown as (this: AudioNode, node: AudioNode, ...args: unknown[]) => AudioNode).call(
+            this,
+            analyser,
+            ...rest
+          )
+        }
+        return (nativeConnect as unknown as (this: AudioNode, node: AudioNode, ...args: unknown[]) => AudioNode).call(
+          this,
+          destination,
+          ...rest
+        )
+      } as typeof AudioNode.prototype.connect
     })
 
     await nav('Settings').click()
@@ -252,6 +280,24 @@ describe('Bunny Media Hub end-to-end', () => {
     })
     expect(running.length).toBeGreaterThan(0)
     expect(running.every((state) => state === 'running')).toBe(true)
+
+    // Regression: a MediaElementAudioSourceNode fed by a cross-origin resource
+    // outputs pure silence, so an uncorsed media scheme made the equalizer mute
+    // every track while the clock kept running. Real samples must reach the
+    // destination.
+    const outputPeak = await page.evaluate(async () => {
+      const analyser = (window as unknown as { __output?: { analyser: AnalyserNode } }).__output?.analyser
+      if (!analyser) return 0
+      const buffer = new Float32Array(analyser.fftSize)
+      let peak = 0
+      for (let index = 0; index < 15; index += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        analyser.getFloatTimeDomainData(buffer)
+        for (const value of buffer) peak = Math.max(peak, Math.abs(value))
+      }
+      return peak
+    })
+    expect(outputPeak).toBeGreaterThan(0.001)
 
     await playerButton('Pause').click()
     await playerButton('Play').waitFor({ timeout: 5000 })

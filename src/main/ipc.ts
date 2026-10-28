@@ -11,6 +11,10 @@ import type { ScannerService } from './library/scannerService'
 import { trackUrl } from './mediaProtocol'
 import { searchCatalogues } from './providers'
 import { fetchLyrics } from './providers/lyrics'
+import { resolveYouTubeVideo, searchYouTubeKeyless, searchYouTubeVideos } from './providers/youtube'
+import { parseYouTubeTarget } from '@core/youtube'
+import type { YouTubeVideo } from '@core/youtube'
+import type { YouTubeStore } from './storage/youtubeStore'
 import type { DiscoveryKind } from '@core/discovery'
 
 export interface IpcContext {
@@ -19,6 +23,7 @@ export interface IpcContext {
   playlists: PlaylistStore
   settings: SettingsStore
   session: SessionStore
+  youtube: YouTubeStore
   scanner: ScannerService
   paths: DataPaths
   getProgress: () => ScanProgress | null
@@ -32,7 +37,7 @@ export function buildLibraryState(context: IpcContext): LibraryViewState {
 }
 
 export function registerIpc(context: IpcContext): void {
-  const { library, playlists, settings, session, scanner, paths } = context
+  const { library, playlists, settings, session, youtube, scanner, paths } = context
   const lyricsCache = new Map<string, LyricsResult | null>()
 
   ipcMain.handle(IPC.libraryGet, () => buildLibraryState(context))
@@ -253,6 +258,77 @@ export function registerIpc(context: IpcContext): void {
       kinds: Array.isArray(kinds) ? kinds : undefined,
       youtubeApiKey: settings.value.youtubeApiKey
     })
+  })
+
+  ipcMain.handle(IPC.youtubeSearch, async (_event, query: string) => {
+    const key = settings.value.youtubeApiKey.trim()
+    if (typeof query !== 'string' || query.trim().length < 2) {
+      return { videos: [], needsKey: false, error: null, source: null, warning: null }
+    }
+
+    // A configured key is preferred (documented API, higher quota, no
+    // scraping), but it is never required: every search falls back to the same
+    // public request YouTube's own player makes.
+    if (key) {
+      try {
+        const videos = await searchYouTubeVideos(query, key, 20)
+        return { videos, needsKey: false, error: null, source: 'api' as const, warning: null }
+      } catch (error) {
+        try {
+          const videos = await searchYouTubeKeyless(query, 20)
+          return {
+            videos,
+            needsKey: false,
+            error: null,
+            source: 'web' as const,
+            warning: `The saved API key failed (${messageOf(error)}), so these results came from YouTube's web search instead.`
+          }
+        } catch {
+          return { videos: [], needsKey: false, error: messageOf(error), source: null, warning: null }
+        }
+      }
+    }
+
+    try {
+      const videos = await searchYouTubeKeyless(query, 20)
+      return { videos, needsKey: false, error: null, source: 'web' as const, warning: null }
+    } catch (error) {
+      return {
+        videos: [],
+        needsKey: false,
+        error: `${messageOf(error)} You can still paste a video link, or add a free API key in Settings.`,
+        source: null,
+        warning: null
+      }
+    }
+  })
+
+  ipcMain.handle(IPC.youtubeResolve, async (_event, raw: string) => {
+    const target = parseYouTubeTarget(String(raw ?? ''))
+    if (!target) return { video: null, error: 'That is not a YouTube link or video id.' }
+    if (target.kind === 'playlist') {
+      return { video: null, error: 'Playlist links are not supported yet — paste a single video link.' }
+    }
+    const resolved = await resolveYouTubeVideo(target.id)
+    if (resolved.video) {
+      youtube.recordHistory(resolved.video)
+      await youtube.flush()
+    }
+    return resolved
+  })
+
+  ipcMain.handle(IPC.youtubeState, () => youtube.state)
+
+  ipcMain.handle(IPC.youtubeToggleFavorite, async (_event, video: YouTubeVideo) => {
+    const state = youtube.toggleFavorite(video)
+    await youtube.flush()
+    return state
+  })
+
+  ipcMain.handle(IPC.youtubeHistoryAdd, async (_event, video: YouTubeVideo) => {
+    const state = youtube.recordHistory(video)
+    await youtube.flush()
+    return state
   })
 
   ipcMain.handle(IPC.lyricsGet, async (_event, trackId: string): Promise<LyricsResult | null> => {

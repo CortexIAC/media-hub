@@ -21,6 +21,9 @@ export class HttpError extends Error {
 export interface FetchJsonOptions {
   timeoutMs?: number
   signal?: AbortSignal
+  method?: 'GET' | 'POST'
+  body?: unknown
+  headers?: Record<string, string>
 }
 
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
@@ -37,9 +40,13 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
   try {
     const response = await fetch(url, {
       signal: controller.signal,
+      method: options.method ?? 'GET',
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       headers: {
         'User-Agent': USER_AGENT,
-        Accept: 'application/json'
+        Accept: 'application/json',
+        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers
       }
     })
     if (!response.ok) throw new HttpError(response.status, url)

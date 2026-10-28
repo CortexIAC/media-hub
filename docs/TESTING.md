@@ -17,13 +17,13 @@ node scripts/check-streams.mjs        # live streams: loopback server, M3U impor
 ## Automated results
 
 ```
-Unit + integration:  11 files, 157 tests, all passing (~32 s)
-End-to-end:          1 file, 9 tests, all passing (~37 s)
+Unit + integration:  12 files, 166 tests, all passing (~28 s)
+End-to-end:          1 file, 9 tests, all passing (~37 s; one 91 s run observed under machine load)
 Typecheck:           clean (node + web)
 Build:               electron-vite production build, clean
 Live YouTube check:  search → select → player reaches "playing" (no API key configured)
 Live dock check:     plays on the Video stage, keeps playing docked on Music/Search, pauses when minimised
-Live stream check:   14/14 checks (local server, real HLS playback, MKV hand-off)
+Live stream check:   17/17 checks (preloaded radio, local server, real HLS playback, MKV hand-off)
 ```
 
 Coverage by area:
@@ -39,6 +39,7 @@ Coverage by area:
 | YouTube search parsing | `tests/core/youtube.test.ts` | id/title/channel/duration mapping from a real-shaped payload, `simpleText` and run titles, `compactVideoRenderer`, hour-long durations, malformed/id-less entries skipped, duplicates removed, playlist/channel renderers ignored, HTML entity decoding, `2:26`/`LIVE` length parsing |
 | YouTube queue | `tests/core/youtubeQueue.test.ts` | play/replace, per-video dedupe, play-all from an index, next/previous with back-stack bounding, enqueue vs play-next, remove/clear/stop, advance only when something is queued |
 | Library scanning | `tests/library/scanner.test.ts` | recursive walk, hidden folders, unsupported extensions, truncation, cancellation, unreadable roots, WAV/MP3/FLAC tags, sidecar and embedded lyrics, artwork caching and dedupe, corrupt and empty files |
+| Stream storage | `tests/library/streamStore.test.ts` | first-launch seeding happens once and is remembered, a deleted suggestion stays deleted after reload, duplicate URLs collapse, rename/mark-played keep other fields, magnet links and duplicates are dropped on load |
 | Persistence | `tests/library/persistence.test.ts` | atomic JSON writes, corrupt-file quarantine, folder/track upserts, playlist edits, favorites, settings sanitising (including equalizer and YouTube key), session sanitising |
 | Byte ranges | `tests/library/byteRange.test.ts` | valid, open-ended, suffix and unsatisfiable ranges |
 | Whole app | `tests/e2e/app.e2e.test.ts` | launch, import, playback of MP3/WAV/FLAC, transport, lyrics in Now Playing, equalizer + bass/boost, measured audio at the output node (peak > 0 with the EQ on), AudioContext resume after suspension, Virtual Library, queue, favorites, playlists, search, restart persistence, clean shutdown |
@@ -52,7 +53,7 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 - YouTube search and playback are checked by `scripts/check-youtube.mjs` and `scripts/check-youtube-dock.mjs`, not by the e2e suite, because they need live network and a third-party player. They fail loudly (non-zero exit) if search returns nothing, the player never reaches `playing`, the dock never appears, or the state does not survive the view change. The dock script also minimizes the window and asserts the player ends up `paused`; it shields the window from the real mouse so a person using the machine cannot skew the run.
 - One full e2e run out of three on 28 Oct 2026 failed three assertions (`Streams` text, accent token, and one earlier check) after running roughly twice as long as usual; two consecutive re-runs passed 9/9 at the normal duration. Treated as environment contention, not a regression, but it is recorded here rather than hidden.
 - The equalizer test measures samples at the node that feeds the speakers. It was added after a real defect: Web Audio outputs silence for cross-origin media, so an uncorsed `bunny-media://` scheme muted every track whenever any processing (EQ, bass or boost) was enabled while the clock kept advancing.
-- Network streams are covered by `scripts/check-streams.mjs`, not the e2e suite: the check needs a local HTTP server and a public HLS stream. It exits non-zero on any missed check and prints `SKIP` for the public HLS check when the network is unavailable, so an offline run cannot be mistaken for a pass.
+- Network streams are covered by `scripts/check-streams.mjs`, not the e2e suite: the check needs a local HTTP server and a public HLS stream. Like the dock check, it sets `setIgnoreMouseEvents(true)` on the window, because a real click during a run can switch the stream mid-assertion (observed once: a person clicked NASA TV while the radio check was waiting for the clock to move). It exits non-zero on any missed check and prints `SKIP` for the public HLS check when the network is unavailable, so an offline run cannot be mistaken for a pass.
 
 ## Network stream verification (28 October 2026)
 
@@ -60,6 +61,9 @@ Fixtures are generated at test time — WAV built sample by sample, MP3 encoded 
 
 | Check | Result |
 | --- | --- |
+| curated public streams are preloaded on a fresh profile | pass |
+| suggestions are grouped as public sources | pass |
+| a preloaded public radio stream plays (SomaFM through the proxy) | pass |
 | M3U channel list expands into entries | pass |
 | playlist titles become entry names | pass |
 | `group-title` groups the imported channels | pass |

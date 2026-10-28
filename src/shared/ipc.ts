@@ -64,6 +64,7 @@ export const IPC = {
 
   streamsState: 'streams:state',
   streamsAdd: 'streams:add',
+  streamsAddSuggested: 'streams:add-suggested',
   streamsRemove: 'streams:remove',
   streamsRename: 'streams:rename',
   streamsMarkPlayed: 'streams:mark-played',
@@ -225,6 +226,7 @@ export interface BunnyApi {
   streams: {
     state(): Promise<StreamsViewState>
     add(url: string, name?: string): Promise<StreamAddResult>
+    addSuggested(): Promise<StreamsViewState>
     remove(id: string): Promise<StreamsViewState>
     rename(id: string, name: string): Promise<StreamsViewState>
     markPlayed(id: string): Promise<StreamsViewState>

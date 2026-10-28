@@ -387,8 +387,9 @@ describe('Bunny Media Hub end-to-end', () => {
     await page.getByText('Music folders').waitFor()
     await shot('08-library.png')
 
-    // Planned screens are labelled as such.
+    // Streams lists the curated public sources plus the provider contracts.
     await nav('Streams').click()
+    await page.getByText('Your streams').waitFor()
     await page.getByText('YouTube', { exact: true }).waitFor()
     await shot('09-streams.png')
 

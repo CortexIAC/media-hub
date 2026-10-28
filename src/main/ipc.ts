@@ -23,6 +23,7 @@ import type { ScannerService } from './library/scannerService'
 import { trackUrl } from './mediaProtocol'
 import { streamProxyUrl } from './streamProtocol'
 import { addStreamFromUrl } from './providers/streams'
+import { seedSources } from '@core/streamSeeds'
 import { openStreamExternally } from './externalPlayer'
 import type { StreamStore } from './storage/streamStore'
 import { searchCatalogues } from './providers'
@@ -413,6 +414,12 @@ export function registerIpc(context: IpcContext): void {
       // A saved-but-unplayable link still carries its explanation.
       error: result.error
     }
+  })
+
+  ipcMain.handle(IPC.streamsAddSuggested, async (): Promise<StreamsViewState> => {
+    streams.add(seedSources())
+    await streams.flush()
+    return buildStreamsState(streams)
   })
 
   ipcMain.handle(IPC.streamsRemove, async (_event, id: string): Promise<StreamsViewState> => {

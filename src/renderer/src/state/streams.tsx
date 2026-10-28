@@ -23,6 +23,7 @@ interface StreamsContextValue {
   error: string | null
   adding: boolean
   add: (rawUrl: string) => Promise<StreamAddResult | null>
+  addSuggested: () => Promise<void>
   play: (source: StreamSourceView) => void
   stop: () => void
   setStatus: (status: StreamPlaybackStatus) => void
@@ -140,6 +141,20 @@ export function StreamsProvider({ children }: { children: ReactNode }): ReactEle
     [ui]
   )
 
+  const addSuggested = useCallback(async () => {
+    try {
+      const state = await window.bunny.streams.addSuggested()
+      setSources(state.sources)
+      ui.pushToast({
+        kind: 'success',
+        title: 'Suggested streams added',
+        message: 'Public radio, NASA TV, and public-domain film and audiobooks.'
+      })
+    } catch (cause) {
+      ui.pushToast({ kind: 'error', title: 'Could not add suggestions', message: String(cause) })
+    }
+  }, [ui])
+
   const remove = useCallback(
     async (id: string) => {
       try {
@@ -211,6 +226,7 @@ export function StreamsProvider({ children }: { children: ReactNode }): ReactEle
       error,
       adding,
       add,
+      addSuggested,
       play,
       stop,
       setStatus,
@@ -219,7 +235,7 @@ export function StreamsProvider({ children }: { children: ReactNode }): ReactEle
       rename,
       openExternally
     }),
-    [sources, current, status, error, adding, add, play, stop, remove, rename, openExternally]
+    [sources, current, status, error, adding, add, addSuggested, play, stop, remove, rename, openExternally]
   )
 
   return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>

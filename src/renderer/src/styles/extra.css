@@ -963,10 +963,15 @@
   /* Bounded by height so the list below stays reachable on a 640px window, and
      by width so a wide monitor does not turn an audio stream into a cinema. */
   width: min(100%, calc(34vh * 16 / 9), 620px);
-  padding: 20px 34px 0;
+  padding: 20px 34px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Opaque and stacked: the scrolling list sits directly beneath this block and
+     a stray repaint above its scrollport must not show through the player. */
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
 }
 
 .stream-host.is-dock {
@@ -1120,4 +1125,13 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.stream-suggestions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 11.5px;
+  color: var(--text-faint);
 }

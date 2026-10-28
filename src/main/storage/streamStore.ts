@@ -4,6 +4,8 @@ import { JsonFile } from './jsonFile'
 
 export interface StreamStoreState {
   sources: StreamSource[]
+  /** Set once the bundled suggestions have been offered, so deleting them sticks. */
+  seededAt: number | null
 }
 
 /** Saved network links. The URL is the identity, so re-adding one is a no-op. */
@@ -11,7 +13,7 @@ export class StreamStore {
   private readonly file: JsonFile<StreamStoreState>
 
   constructor(filePath: string) {
-    this.file = new JsonFile<StreamStoreState>(filePath, () => ({ sources: [] }), sanitize)
+    this.file = new JsonFile<StreamStoreState>(filePath, () => ({ sources: [], seededAt: null }), sanitize)
   }
 
   async load(): Promise<void> {
@@ -20,6 +22,20 @@ export class StreamStore {
 
   get sources(): StreamSource[] {
     return [...this.file.data.sources]
+  }
+
+  get seededAt(): number | null {
+    return this.file.data.seededAt
+  }
+
+  /**
+   * Adds the bundled suggestions exactly once. Recording the moment matters:
+   * re-adding them on every launch would resurrect links the user deleted.
+   */
+  seed(candidates: StreamSource[], now = Date.now()): number {
+    const result = this.add(candidates)
+    this.file.set({ ...this.file.data, seededAt: now })
+    return result.added.length
   }
 
   get(id: string): StreamSource | null {
@@ -87,7 +103,9 @@ export class StreamStore {
 
 function sanitize(raw: unknown): StreamStoreState {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Partial<StreamStoreState>
-  if (!Array.isArray(source.sources)) return { sources: [] }
+  const seededAt =
+    typeof source.seededAt === 'number' && Number.isFinite(source.seededAt) ? source.seededAt : null
+  if (!Array.isArray(source.sources)) return { sources: [], seededAt }
   const seen = new Set<string>()
   const sources: StreamSource[] = []
   for (const entry of source.sources) {
@@ -96,5 +114,5 @@ function sanitize(raw: unknown): StreamStoreState {
     seen.add(clean.id)
     sources.push(clean)
   }
-  return { sources }
+  return { sources, seededAt }
 }

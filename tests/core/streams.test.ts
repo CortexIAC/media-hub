@@ -10,6 +10,7 @@ import {
   sanitizeStreamSource,
   streamIdFor
 } from '@core/streams'
+import { missingSeedCount, seedSources, STREAM_SEEDS } from '@core/streamSeeds'
 
 const CHANNEL_LIST = `\uFEFF#EXTM3U
 #EXTINF:-1 tvg-id="bbc1" tvg-logo="https://cdn.example/logos/bbc1.png" group-title="News",BBC One
@@ -239,5 +240,33 @@ describe('sanitizeStreamSource', () => {
     expect(sanitizeStreamSource({ url: 'https://a.example/x.mp4', logoUrl: 'https://a.example/l.png' })?.logoUrl).toBe(
       'https://a.example/l.png'
     )
+  })
+})
+
+describe('bundled stream suggestions', () => {
+  it('are all valid http(s) links with unique ids', () => {
+    const seeds = seedSources(1_700_000_000_000)
+    expect(seeds.length).toBeGreaterThanOrEqual(8)
+    expect(new Set(seeds.map((seed) => seed.id)).size).toBe(seeds.length)
+    expect(new Set(seeds.map((seed) => seed.url)).size).toBe(seeds.length)
+    for (const seed of seeds) {
+      expect(normalizeStreamUrl(seed.url)).toBe(seed.url)
+      expect(seed.name.trim().length).toBeGreaterThan(0)
+      expect(seed.group).toBeTruthy()
+      expect(seed.addedAt).toBe(1_700_000_000_000)
+    }
+  })
+
+  it('classifies the HLS suggestion correctly and nothing as unsupported', () => {
+    for (const seed of STREAM_SEEDS) {
+      const expected = seed.url.endsWith('.m3u8') ? 'hls' : 'progressive'
+      expect(classifyStream(seed.url).kind).toBe(expected)
+    }
+  })
+
+  it('only counts suggestions that are not saved yet', () => {
+    const saved = new Set(STREAM_SEEDS.slice(0, 3).map((seed) => normalizeStreamUrl(seed.url) as string))
+    expect(missingSeedCount(saved)).toBe(STREAM_SEEDS.length - 3)
+    expect(missingSeedCount(new Set(STREAM_SEEDS.map((seed) => normalizeStreamUrl(seed.url) as string)))).toBe(0)
   })
 })

@@ -82,7 +82,7 @@ Playback never leaves YouTube's own player: `components/YouTubePlayer` embeds th
 
 ### Network streams
 
-A saved stream is a URL, an inferred kind and a name (`core/streams.ts`). Everything that decides what a link *is* is pure and unit tested:
+A saved stream is a URL, an inferred kind and a name (`core/streams.ts`). On first launch `core/streamSeeds.ts` supplies a curated set of publicly available links (public radio, NASA TV, Internet Archive public-domain film and audiobooks); `storage/streamStore.ts` records `seededAt` so deleting a suggestion is permanent instead of being undone on the next start. Everything that decides what a link *is* is pure and unit tested:
 
 - `normalizeStreamUrl` accepts http(s) only, so torrent/magnet and `file:` links never reach the player;
 - `parsePlaylist` expands M3U and PLS channel lists but deliberately refuses to expand an HLS playlist, whose entries are three-second media segments rather than channels;

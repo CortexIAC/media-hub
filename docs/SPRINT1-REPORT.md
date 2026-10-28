@@ -20,7 +20,7 @@ Status: **complete for the defined Sprint 1 scope**, plus the requested equalize
 - Robust handling of missing files, unreadable folders, corrupt and empty files, and recognised-but-unsupported extensions.
 - Virtual Library: Open Library, Project Gutenberg (+ Internet Archive mirror fallback), LibriVox, Internet Archive search; catalogue results open in the browser.
 - Online results also appear in global search, so artists outside the local library are no longer "not found".
-- Network streams: paste a direct media URL, an HLS playlist or an M3U/PLS channel list; links are probed before saving, channel lists expand into entries, media is proxied through `bunny-stream:` with range support, and containers Chromium cannot decode (MKV/AVI/MPEG-TS/HEVC) hand off to VLC. The player docks so a stream keeps playing while browsing.
+- Network streams: a curated set of legal public streams (public radio, NASA TV, public-domain film and audiobooks) is offered on first launch and seeded exactly once; paste any other direct media URL, HLS playlist or M3U/PLS channel list; links are probed before saving, channel lists expand into entries, media is proxied through `bunny-stream:` with range support, and containers Chromium cannot decode (MKV/AVI/MPEG-TS/HEVC) hand off to VLC. The player docks so a stream keeps playing while browsing.
 - One-click Windows launcher (`launch.cmd`).
 
 ### Implemented but limited
@@ -43,7 +43,7 @@ Layers are separated as required: application (renderer views/state/theme), core
 ```bash
 npm install
 npm run typecheck        # clean
-npm test                 # 157 tests / 11 files, pass
+npm test                 # 166 tests / 12 files, pass
 npm run build            # clean production build
 npm run test:e2e         # 9 tests, pass, screenshots written
 npm run bench            # startup + 300-track import numbers
@@ -54,8 +54,8 @@ node scripts/check-streams.mjs     # live streams: loopback server, M3U import, 
 
 ## 4. Automated test results
 
-- Unit/integration: **157 passed** (queue, player controller, search, discovery helpers, lyrics parsing, YouTube search parsing, network stream parsing/HLS rewriting, scanner, persistence, byte ranges).
-- Live stream harness: **14/14 checks** — M3U import, real audio through the proxy, playback surviving navigation, MKV hand-off, HLS rewriting, and real HLS playback through hls.js.
+- Unit/integration: **166 passed** (queue, player controller, search, discovery helpers, lyrics parsing, YouTube search parsing, network stream parsing/HLS rewriting, scanner, persistence, byte ranges).
+- Live stream harness: **17/17 checks** — M3U import, real audio through the proxy, playback surviving navigation, MKV hand-off, HLS rewriting, and real HLS playback through hls.js.
 - End-to-end: **9 passed** (launch, import, MP3 playback/transport, FLAC playback, lyrics, equalizer + bass/boost + AudioContext resume, Virtual Library, queue/favorites/playlists/search/settings, restart persistence, clean shutdown).
 - One transient e2e timeout occurred once in four full runs; it passed on immediate re-run. Documented in [TESTING.md](TESTING.md).
 

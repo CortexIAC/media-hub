@@ -11,6 +11,7 @@ import { PlaylistStore } from './storage/playlistStore'
 import { SessionStore, SettingsStore } from './storage/sessionStore'
 import { YouTubeStore } from './storage/youtubeStore'
 import { StreamStore } from './storage/streamStore'
+import { seedSources } from '@core/streamSeeds'
 import { dataPaths, type DataPaths } from './storage/paths'
 import { startRendererServer, type RendererServer } from './rendererServer'
 
@@ -112,6 +113,14 @@ async function bootstrap(): Promise<void> {
     youtube.load(),
     streams.load()
   ])
+
+  // First launch only: offer the curated public streams so the screen is not
+  // empty. `seededAt` makes deleting them permanent instead of resurrecting
+  // them on the next start.
+  if (streams.seededAt === null) {
+    streams.seed(seedSources())
+    await streams.flush()
+  }
 
   scanner = new ScannerService({
     workerPath: join(__dirname, 'scannerWorker.js'),

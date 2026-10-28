@@ -30,6 +30,7 @@ Requirements: Node.js 20 or newer (developed on Node 24, Windows 11) and a deskt
 - **Playlists and favorites** persist across restarts, along with the last track, queue and position.
 - **Virtual Library**: one search across Open Library, Project Gutenberg (with an Internet Archive mirror fallback), LibriVox and the Internet Archive.
 - **Streams**: paste a direct media URL, an HLS (`.m3u8`) playlist or an M3U/PLS channel list. Links are checked before they are saved, a channel list is expanded into entries, and playback survives leaving the screen (the player docks to the corner). Formats Chromium cannot decode — MKV, AVI, MPEG-TS, HEVC — are handed to VLC with the same URL instead of failing silently.
+- **Suggested streams on first launch**: a small curated set of *legal, publicly offered* links — public radio (SomaFM, Radio Paradise, Radio Swiss Classic), NASA's public live HLS stream, and public-domain film and audiobooks from the Internet Archive. They are added once; delete any you do not want and they stay deleted. No IPTV lists, trackers or indexer APIs are bundled.
 - **YouTube**: search with no key at all — from the Video screen or the search field at the top — then watch in YouTube's own embedded player with the app's transport controls, queue, saved videos and recently played history. The player docks to the corner while you browse other screens (a video keeps playing while you look through the library, and it stays visible on purpose: YouTube's terms forbid hidden playback). A Data API key is optional and only changes the search path.
 - **Settings**: theme accent, rescan on launch, equalizer, YouTube key, library tools, build information.
 
@@ -44,7 +45,7 @@ npm install          # install dependencies
 npm run dev          # Electron + Vite with hot reload
 npm run build        # typecheck both processes and build to out/
 npm start            # run the built app (electron-vite preview)
-npm test             # 157 unit tests (vitest)
+npm test             # 166 unit tests (vitest)
 npm run test:e2e     # build, then 9 end-to-end tests against the real app
 npm run bench        # cold start + 300-track import responsiveness
 npm run typecheck    # tsc for the node and web projects

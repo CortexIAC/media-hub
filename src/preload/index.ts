@@ -71,6 +71,7 @@ const api: BunnyApi = {
   streams: {
     state: () => ipcRenderer.invoke(IPC.streamsState),
     add: (url, name) => ipcRenderer.invoke(IPC.streamsAdd, url, name),
+    addSuggested: () => ipcRenderer.invoke(IPC.streamsAddSuggested),
     remove: (id) => ipcRenderer.invoke(IPC.streamsRemove, id),
     rename: (id, name) => ipcRenderer.invoke(IPC.streamsRename, id, name),
     markPlayed: (id) => ipcRenderer.invoke(IPC.streamsMarkPlayed, id),

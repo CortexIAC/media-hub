@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
+import { STREAM_SEEDS } from '@core/streamSeeds'
 import { streamHostLabel } from '@core/streams'
 import type { StreamSourceView } from '@shared/ipc'
 import { AlertIcon, ExternalIcon, PlayIcon, PlusIcon, SearchIcon, StreamsIcon, TrashIcon } from '../components/Icons'
@@ -46,6 +47,11 @@ export function StreamsView(): ReactElement {
   }, [visible])
 
   const unsupportedCount = streams.sources.filter((source) => source.kind === 'unsupported').length
+
+  const missingSuggestions = useMemo(() => {
+    const saved = new Set(streams.sources.map((source) => source.url))
+    return STREAM_SEEDS.filter((seed) => !saved.has(seed.url)).length
+  }, [streams.sources])
 
   return (
     <div className="view">
@@ -109,8 +115,8 @@ export function StreamsView(): ReactElement {
             </span>
             <h3>No streams yet</h3>
             <p>
-              Paste any stream address you are entitled to watch or listen to. Nothing is bundled with the app and no
-              catalogue is scraped — this screen plays links you supply.
+              The suggested list below covers public radio, NASA TV and public-domain film and audiobooks. Everything else
+              is a link you supply — nothing here searches trackers or scrapes a catalogue.
             </p>
             <ul className="stream-examples">
               <li>
@@ -147,6 +153,17 @@ export function StreamsView(): ReactElement {
             ))}
           </div>
         )}
+
+        {missingSuggestions > 0 ? (
+          <div className="stream-suggestions">
+            <span>
+              {missingSuggestions} suggested {missingSuggestions === 1 ? 'stream is' : 'streams are'} not in your list.
+            </span>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void streams.addSuggested()}>
+              <PlusIcon size={12} /> Add suggested streams
+            </button>
+          </div>
+        ) : null}
 
         {unsupportedCount > 0 ? (
           <p className="stream-note">

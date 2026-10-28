@@ -171,23 +171,69 @@ try {
   await page.waitForSelector('.view', { timeout: 60_000 })
   await page.bringToFront()
   await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.setSize(1480, 940)
+    const window = BrowserWindow.getAllWindows()[0]
+    window?.setSize(1480, 940)
+    // Cyber-physical interference: a person clicking in the window mid-run can
+    // switch the stream out from under an assertion. CDP-driven clicks still
+    // land, so the harness performs the interactions while the real mouse is
+    // ignored.
+    window?.setIgnoreMouseEvents(true)
   })
 
   await page.locator('.nav-item', { hasText: 'Streams' }).first().click()
   await page.waitForSelector('.stream-add-input')
 
+  // --- 0. Curated public streams are preloaded on a fresh profile --------
+  const seededRows = await waitForValue(() => page.locator('.stream-row').count(), (count) => count >= 10)
+  check('Public streams are preloaded on first launch', seededRows >= 10, `rows=${seededRows}`)
+  const seedGroups = await page.locator('.stream-group-head h3').allInnerTexts()
+  check(
+    'Suggestions are grouped as public sources',
+    seedGroups.some((group) => /public radio/i.test(group)) && seedGroups.some((group) => /public domain/i.test(group)),
+    seedGroups.join(' | ')
+  )
+
+  let radioReachable = false
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10_000)
+    const response = await fetch('https://ice1.somafm.com/groovesalad-128-mp3', {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'BunnyMediaHub/0.1 (desktop media player)' }
+    })
+    clearTimeout(timer)
+    radioReachable = response.ok
+    await response.body?.cancel().catch(() => undefined)
+  } catch {
+    radioReachable = false
+  }
+
+  if (!radioReachable) {
+    console.log('SKIP  preloaded radio playback — the public radio stream was unreachable')
+  } else {
+    await page.locator('.stream-row', { hasText: 'Groove Salad' }).first().locator('.stream-play').click()
+    const radio = await waitForValue(
+      () => page.evaluate(() => {
+        const video = document.querySelector('.stream-video')
+        return { time: video?.currentTime ?? -1, ready: video?.readyState ?? -1 }
+      }),
+      (state) => state.time > 0.5 && state.ready >= 2,
+      30_000
+    )
+    check('A preloaded public radio stream plays', radio?.time > 0.5, `time=${radio?.time} ready=${radio?.ready}`)
+  }
+
   // --- 1. Import an M3U channel list -------------------------------------
   await page.fill('.stream-add-input', `${origin}/channels.m3u`)
   await page.getByRole('button', { name: /add stream/i }).click()
 
-  const rows = await waitForValue(() => page.locator('.stream-row').count(), (count) => count >= 2)
-  check('M3U channel list expands into entries', rows >= 2, `rows=${rows}`)
+  const rows = await waitForValue(() => page.locator('.stream-row').count(), (count) => count >= seededRows + 2)
+  check('M3U channel list expands into entries', rows >= seededRows + 2, `rows=${rows}`)
 
   const names = await page.locator('.stream-row-name').allInnerTexts()
   check('Playlist titles are used as names', names.includes('Tone Channel One'), names.join(' | '))
-  const groupLabel = await page.locator('.stream-group-head h3').first().innerText()
-  check('group-title groups the imported channels', groupLabel.trim().toLowerCase() === 'test radio', groupLabel)
+  const importedRows = await page.locator('.stream-group', { hasText: 'Test radio' }).locator('.stream-row').count()
+  check('group-title groups the imported channels', importedRows === 2, `rows in group=${importedRows}`)
 
   // --- 2. Play a channel and prove the clock moves ------------------------
   await page.locator('.stream-row', { hasText: 'Tone Channel One' }).locator('.stream-play').click()
@@ -228,8 +274,7 @@ try {
   await page.locator('.nav-item', { hasText: 'Streams' }).first().click()
   await page.fill('.stream-add-input', `${origin}/clip.mkv`)
   await page.getByRole('button', { name: /add stream/i }).click()
-  await waitForValue(() => page.locator('.stream-row').count(), (count) => count >= 3)
-
+  await waitForValue(() => page.locator('.stream-row').count(), (count) => count >= seededRows + 3)
   const mkvRow = page.locator('.stream-row', { hasText: 'clip' }).first()
   const meta = await mkvRow.locator('.stream-row-meta').innerText()
   check('MKV is flagged as needing an external player', meta.includes('external player'), meta)
